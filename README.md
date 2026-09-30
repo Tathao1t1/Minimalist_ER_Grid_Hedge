@@ -1,11 +1,5 @@
 # Minimalist Kaufman ER Grid Trading Algorithm with Macro Futures Overlay
 
-[![Course](https://img.shields.io/badge/Course-CS408--APCS--HCMUS-darkblue.svg)](https://github.com/algotrade-education/DynamicGrid)
-[![Strategy](https://img.shields.io/badge/Strategy-Minimalist%20ER%20Grid%20Hedge-darkgreen.svg)](#trading-hypothesis--architecture)
-[![Holdout Victory](https://img.shields.io/badge/Blind%20Holdout-%2B9.30%25%20vs%20VN30%20--3.44%25-brightgreen.svg)](#forward-blind-holdout-championship-2026)
-[![Sharpe Ratio](https://img.shields.io/badge/Sharpe%20Ratio-1.987%20(OOS)-gold.svg)](#out-of-sample-backtesting-2024)
-[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](#implementation--quick-start)
-
 > **Repository Prototype Emulation**: Built in accordance with the project standard and repository layout specified in [`algotrade-education/DynamicGrid`](https://github.com/algotrade-education/DynamicGrid).
 
 ---
@@ -112,17 +106,10 @@ The program consumes high-precision 30-minute candlestick data and daily benchma
 | `data/benchmark/vn30_daily.parquet` | Continuous 2021–2026 | 1,923 bars | VN30 benchmark daily index closes |
 
 ### Database Ingestion (Optional)
-To fetch live or updated data directly from `algotradeDB`:
-1. Configure credentials in `.env`:
-   ```bash
-   DB_HOST=api.algotrade.vn
-   DB_PORT=5432
-   DB_NAME=algotradeDB
-   DB_USER=intern_read_only
-   DB_PASSWORD=<password>
+To fetch live or updated data directly from `algotradeDB`
    ```
-2. Custom SQL queries can be edited in `data/query.txt`.
-3. In `config/config.yaml`, set `fetch_data: true`.
+1. Custom SQL queries can be edited in `data/query.txt`.
+2. In `config/config.yaml`, set `fetch_data: true`.
 
 ---
 
