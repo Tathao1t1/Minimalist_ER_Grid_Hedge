@@ -39,9 +39,11 @@ For foundational principles of grid trading and mathematical foundations:
 
 ---
 
-## Trading Hypothesis & Architecture
+## Step 1 – Forming Algorithm Hypotheses & Theoretical Foundations
 
-The strategy operates on a three-tier modular quantitative pipeline:
+Classical grid strategies aim to harvest localized price volatility without predicting directional momentum. However, unhedged equity grids face two structural challenges: **selection overfitting** and **severe downtrend inventory drag**.
+
+The **Minimalist ER Grid + Macro Futures Hedge** hypothesis solves these through a three-tier quantitative pipeline:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -64,7 +66,7 @@ The strategy operates on a three-tier modular quantitative pipeline:
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Step 1: Hypothesis Formulation & Non-Parametric ER Selection
+### 1.1 Non-Parametric Kaufman ER Selection
 To prevent overfitting, we discard complex multi-factor indicators and employ only the **Kaufman Efficiency Ratio (ER)**:
 
 $$\text{ER} = \frac{|\text{Price}_t - \text{Price}_{t-n}|}{\sum_{i=1}^n |\text{Price}_i - \text{Price}_{i-1}|}$$
@@ -72,10 +74,10 @@ $$\text{ER} = \frac{|\text{Price}_t - \text{Price}_{t-n}|}{\sum_{i=1}^n |\text{P
 - $\text{ER} \to 1.0$: Pure unidirectional trend (avoid for grid trading).
 - $\text{ER} \to 0.0$: Pure mean-reverting oscillation with maximum price path length and minimum net displacement.
 
-Every 10 trading days, the top 4 constituents with the lowest 40-day ER are selected.
+Every 10 trading days, the top 4 constituents with the lowest 40-day ER are selected into the active portfolio whitelist with zero lookahead bias.
 
-### Step 2: Mathematical Proof of Correct Grid Implementation ($R^2 = 0.964$)
-A correct grid implementation must exhibit a bell-shaped Gaussian normal distribution of take-profit executions across grid depths. If executions concentrate solely at level 1, the grid is ineffective; if executions skew erratically, the spacing is miscalibrated.
+### 1.2 Mathematical & Empirical Proof: Take Profit Normal Distribution ($R^2 = 0.964$)
+A theoretically correct grid implementation must exhibit a bell-shaped Gaussian normal distribution of take-profit executions across grid depths. If executions concentrate solely at level 1, the grid is ineffective; if executions skew erratically, the spacing is miscalibrated.
 
 ![Take Profit Normal Distribution](images/grid_normal_distribution_proof.png)
 
@@ -85,24 +87,55 @@ Our empirical verification confirmed:
 - **Gaussian Fit Goodness-of-Fit ($R^2$)**: **0.9643**
 - **Floor Stop Breach Rate**: **0.00%** (100% win rate across oscillation harvests)
 
-### Step 3: Forming Set of Quantitative Rules
+---
 
-The formal rules governing the strategy are defined below:
+## Step 2 – Data Preparation
+
+Data preparation forms the empirical foundation of our research methodology, ensuring complete point-in-time accuracy, zero survivorship bias, and strict session integrity under Vietnamese market rules.
+
+### 2.1 Dataset Ingestion & Preprocessing
+The program consumes high-precision 30-minute candlestick data and daily benchmark index data:
+
+| Dataset Split | Time Period | Record Count | Description |
+| :--- | :--- | :--- | :--- |
+| `data/in_sample/` | 2021-01-01 to 2024-01-01 | 192,886 bars | In-sample development & parameter sweep |
+| `data/out_of_sample/` | 2024-01-01 to 2025-01-01 | 67,428 bars | Out-of-sample validation |
+| `data/forward_holdout/` | 2026-01-01 to 2026-10-01 | 46,203 bars | Blind forward holdout tournament |
+| `data/benchmark/vn30f1m_30m.parquet` | Continuous 2021–2026 | 10,499 bars | Continuous front-month VN30F futures bars |
+| `data/benchmark/vn30_daily.parquet` | Continuous 2021–2026 | 1,923 bars | VN30 benchmark daily index closes |
+
+### 2.2 Survivorship Bias & Continuous Futures Construction
+- **Point-in-Time Universe**: Constituent membership is filtered at each rebalance date against historical VN30 composition, eliminating survivorship bias.
+- **Continuous Derivative Series**: The front-month VN30F1M contract tick series is rolled on the third Thursday of each expiry month to the next nearest contract, creating a seamless continuous 30-minute series.
+- **Session Filtering**: Only trading hours (Morning: 09:15–11:30, Afternoon: 13:00–14:30) are retained; non-trading ticks and invalid outlier spikes are filtered.
+
+### 2.3 Database Ingestion (Optional)
+To fetch live or updated data directly from `algotradeDB`:
+1. Custom SQL queries can be edited in `data/query.txt`.
+2. In `config/config.yaml`, set `fetch_data: true`.
+
+---
+
+## Step 3 – Transforming Hypothesis to Sets of Rules
+
+To bridge theoretical abstraction into an executable trading algorithm, we define explicit, deterministic quantitative rules divided into the **Spot Equity Grid Strategy** and the **Macro Hedging Strategy**.
+
+---
+
+### 3.1 Spot Equity Grid Strategy Rules
 
 #### 1. Initial Capital Allocation
-- **Total Fund Capital**: **2,000,000,000 VND**
-- **Spot Grid Capital**: **1,000,000,000 VND** (50% of fund) dedicated to equity inventory accumulation and oscillation harvesting.
-- **Futures Hedge Reserve**: **1,000,000,000 VND** (50% of fund) held as cash reserve for VN30F margin requirements and mark-to-market daily settlement cushions.
+- **Spot Grid Capital**: **1,000,000,000 VND** (50% of total fund capital) dedicated exclusively to stock inventory accumulation and oscillation harvesting.
 
-#### 2. Entry Rule
+#### 2. Entry Rules
 - **Universe Filter**: Active constituents of the VN30 equity index.
-- **Rolling Selection**: Kaufman ER evaluated over a lookback of $N = 40$ trading days. Whitelist rebalanced every $M = 10$ trading days with zero lookahead bias. The top $K = 4$ stocks with the lowest ER are selected.
+- **Rolling Whitelist Selection**: Kaufman ER evaluated over a lookback of $N = 40$ trading days. Whitelist rebalanced every $M = 10$ trading days with zero lookahead bias. The top $K = 4$ stocks with the lowest ER are selected.
 - **Anchor Baseline**: For each selected ticker, the anchor price $S$ is set to its 50-period 30-minute SMA ($SMA_{50}$).
 - **Geometric Grid Generation**: 18 buy limit levels spaced at $1.8\%$ intervals:
   $$\text{Level}_k = S \times (1 - k \times 0.018), \quad \text{for } k \in \{1, 2, \dots, 18\}$$
-- **Execution Trigger**: When a 30m bar low reaches $\text{Low} \le \text{Level}_k$ and level $k$ is not currently occupied, place and execute a limit buy order.
+- **Execution Trigger**: When a 30m bar low reaches $\text{Low} \le \text{Level}_k$ and level $k$ is not currently occupied, execute a limit buy order.
 
-#### 3. Exit Rule
+#### 3. Exit Rules
 - **Take-Profit (TP)**: Each filled level $k$ immediately places a limit sell order at the adjacent upper grid level:
   $$\text{TP}_k = S \times (1 - (k - 1) \times 0.018)$$
 - **T+2.5 Settlement Guard**: In compliance with Vietnam regulations, positions cannot be sold until $T+2$ trading days at 13:00 PM. Take-profit orders are only eligible for execution once settlement is satisfied.
@@ -120,36 +153,50 @@ The formal rules governing the strategy are defined below:
 - **Statutory Lot Rounding**: Share quantities are rounded to the nearest 100-share board lot with a 100-share floor:
   $$\text{Shares}_k = \max\left(100, \left\lfloor \frac{\text{Capital per Level}}{\text{Fill Price} \times 100} + 0.5 \right\rfloor \times 100\right)$$
 
-#### 5. Execution Logic & Macro Futures Overlay
-- **Transaction Costs & Friction**:
-  - Brokerage fee: **15 bps** (0.15%) on all buys and sells.
-  - Government sales tax: **10 bps** (0.10%) on sells.
-  - Execution slippage: **5 bps** (0.05%) on all fills.
-  - Futures exchange fee: **5 bps** (0.05%) per contract turnover.
-- **Macro Regime Hedging**:
-  Evaluated at each daily close on the VN30 index benchmark:
-  - **Bear Regime** ($\text{Close} < \text{SMA}_{50} \text{ and } \text{ROC}_{20} < -2\%$): Short 10 VN30F1M contracts ($10 \times 100,000$ VND/point multiplier) to eliminate secular bear drag.
-  - **Bull Regime** ($\text{Close} > \text{SMA}_{50} \text{ and } \text{ROC}_{20} > 0\%$): Long 10 VN30F1M contracts to capture macro momentum.
-  - **Neutral Regime** (Otherwise): 0 contracts (flat cash reserve).
+#### 5. Spot Execution Logic & Cost Model
+- Brokerage fee: **15 bps** (0.15%) on all buys and sells.
+- Government sales tax: **10 bps** (0.10%) on sells.
+- Execution slippage: **5 bps** (0.05%) on all fills.
 
 ---
 
-## Data
+### 3.2 Macro Futures Hedging Strategy Rules
 
-The program consumes high-precision 30-minute candlestick data and daily benchmark index data:
+#### 1. Hedging Instrument & Economic Rationale
+- **Instrument**: VN30F1M (Front-month VN30 index futures contract).
+- **Contract Specifications**: Multiplier of 100,000 VND per index point, $T+0$ settlement, and high market liquidity.
+- **Objective**: Neutralize systemic market beta during secular bear trends (e.g. 2022 crash), converting equity inventory drag into net hedging gains without interfering with localized stock oscillations.
 
-| Dataset | Time Period | Record Count | Description |
-| :--- | :--- | :--- | :--- |
-| `data/in_sample/` | 2021-01-01 to 2024-01-01 | 192,886 bars | In-sample development & parameter sweep |
-| `data/out_of_sample/` | 2024-01-01 to 2025-01-01 | 67,428 bars | Out-of-sample validation |
-| `data/forward_holdout/` | 2026-01-01 to 2026-10-01 | 46,203 bars | Blind forward holdout tournament |
-| `data/benchmark/vn30f1m_30m.parquet` | Continuous 2021–2026 | 10,499 bars | Continuous front-month VN30F futures bars |
-| `data/benchmark/vn30_daily.parquet` | Continuous 2021–2026 | 1,923 bars | VN30 benchmark daily index closes |
+#### 2. Hedging Capital Allocation
+- **Futures Hedge Reserve**: **1,000,000,000 VND** (50% of total fund capital) maintained as cash buffer for initial margin requirements and mark-to-market daily cash settlement variations.
 
-### Database Ingestion (Optional)
-To fetch live or updated data directly from `algotradeDB`:
-1. Custom SQL queries can be edited in `data/query.txt`.
-2. In `config/config.yaml`, set `fetch_data: true`.
+#### 3. Hedging Entry Rules (Regime Signals)
+Evaluated at the daily close of the VN30 benchmark index:
+- **Bear Regime Entry (Short Hedge)**:
+  - Condition: $\text{VN30 Close} < \text{SMA}_{50} \text{ and } \text{ROC}_{20} < -2.0\%$ (downtrend confirmed by moving average and negative momentum).
+  - Action: Open or maintain a **SHORT** position of **10 VN30F1M contracts**.
+- **Bull Regime Entry (Long Exposure)**:
+  - Condition: $\text{VN30 Close} > \text{SMA}_{50} \text{ and } \text{ROC}_{20} > 0.0\%$ (uptrend confirmed by moving average and positive momentum).
+  - Action: Open or maintain a **LONG** position of **10 VN30F1M contracts**.
+
+#### 4. Hedging Exit Rules
+- **Transition to Neutral Regime**: If market conditions exit Bear or Bull regime thresholds without meeting opposite criteria, immediately close all open futures contracts to hold **0 contracts (flat cash)**.
+- **Contract Rollover Rule**: On the third Thursday of the expiry month, open positions are automatically rolled to the next front-month contract (VN30F2M / new VN30F1M) at the close of trading, eliminating delivery risk.
+
+#### 5. Hedging Position Sizing & Margin Safety
+- **Contract Count**: Fixed at **10 contracts** ($N = 10$).
+- **Notional Coverage**: At an index value of $\approx 1,200$, 10 contracts represent:
+  $$\text{Notional Value} = 10 \times 1,200 \times 100,000\text{ VND} = 1,200,000,000\text{ VND}$$
+  This provides a hedge ratio of $\approx 1.2\times$ against the 1,000,000,000 VND spot portfolio, delivering comprehensive beta coverage.
+- **Margin Safety**: At a 20% statutory initial margin requirement, 10 contracts require:
+  $$\text{Required Margin} = 1,200,000,000\text{ VND} \times 20\% = 240,000,000\text{ VND}$$
+  This constitutes only **24% margin utilization** of the 1,000,000,000 VND reserve, leaving a **>760,000,000 VND safety cushion** preventing any margin call or forced liquidation risk.
+
+#### 6. Hedging Execution Logic & Consolidated NAV
+- **Friction**: 5 bps (0.05%) round-turn broker/exchange fee and 5 bps execution slippage per contract transition.
+- **Consolidated Net Asset Value (NAV)**:
+  At each 30-minute timestamp $t$, the total fund valuation is consolidated as:
+  $$\text{Fund Equity}_t = \text{Spot Cash}_t + \sum \text{Spot Positions}_t + \text{Hedge Buffer Capital} + \text{Cumulative Futures PnL}_t$$
 
 ---
 
@@ -160,8 +207,8 @@ Requires Python 3.10+:
 
 ```bash
 # Clone the repository
-git clone https://github.com/algotrade-education/DynamicGrid.git
-cd DynamicGrid
+git clone https://github.com/Tathao1t1/Minimalist_ER_Grid_Hedge.git
+cd Minimalist_ER_Grid_Hedge
 
 # Create and activate virtual environment
 python -m venv venv
@@ -246,7 +293,7 @@ optimization:
 
 ---
 
-## In-sample Backtesting (2021–2023)
+## Step 4 – Backtesting on In-Sample Data (2021–2023)
 
 Run the in-sample backtest:
 ```bash
@@ -282,7 +329,7 @@ Component Breakdown:
 
 ---
 
-## Optimization (Optuna Parameter Sweep)
+## Step 5 – Parameter Optimization & Plateau Analysis
 
 Execute Bayesian parameter optimization:
 ```bash
@@ -310,7 +357,7 @@ The optimizer automatically triggers a post-optimization backtest inside `result
 
 ---
 
-## Out-of-sample Backtesting (2024)
+## Step 6 – Backtesting on Out-of-Sample Historical Data (2024)
 
 Validate strategy generalizability on unseen 2024 data:
 ```bash
@@ -340,7 +387,7 @@ Component Breakdown:
 
 ---
 
-## Forward Blind Holdout Championship (2026)
+## Step 7 – Paper Trading & Forward Blind Holdout Championship (2026)
 
 The ultimate paper-trading proxy test on strictly blind forward holdout data (Jan 5 – Sep 18, 2026):
 ```bash
