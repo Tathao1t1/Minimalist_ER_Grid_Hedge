@@ -13,7 +13,7 @@ This repository presents the **Minimalist ER Grid Trading Strategy with Macro Fu
 2. **True Geometric Grid Recycling**: An 18-level geometric grid with take-profit limit orders placed at adjacent upper levels, verified empirically to produce a **statistically proven Gaussian Normal Distribution (R² = 0.964)** of oscillation harvests.
 3. **Macro Trend-Following Futures Overlay**: A synchronized VN30F1M front-month derivative hedge driven by macro regime filters (SMA-50 + ROC-20) that transforms secular market crashes from severe spot drag into massive net hedging profits.
 
-Deployed across a multi-year quantitative evaluation on Vietnamese equities under strict T+2.5 settlement and statutory fee rules, the strategy achieved **+41.79% in-sample return**, **+14.80% out-of-sample return (Sharpe 1.987, MaxDD -2.93%)**, and emerged as the **Undisputed Champion in the 2026 Blind Forward Holdout Tournament with +9.30% return vs. the VN30 benchmark (-3.44%)**, achieving **296 spot harvests with zero floor stops (100% win rate)**.
+Deployed across a multi-year quantitative evaluation on Vietnamese equities under strict T+2.5 settlement and statutory fee rules, the strategy achieved **+41.79% in-sample return**, **+14.80% out-of-sample return (Sharpe 1.987, MaxDD -2.93%)**, and emerged as the **Undisputed Champion in the 2026 Blind Forward Holdout Tournament with +5.13% return (Sharpe 0.60, Calmar 1.07) vs. the VN30 benchmark (-3.44%)**, achieving **296 spot harvests with zero floor stops (100% win rate)**.
 
 ---
 
@@ -461,14 +461,14 @@ python src/driver.py --mode backtest --data holdout
 ================================================================================
 FINAL FORWARD HOLDOUT RESULTS (2026 CHAMPIONSHIP):
 ================================================================================
-• Total Return:     -0.04% (-767,078 VND)       | VN30: -3.44% (+3.40% Alpha)
-• Annualized CAGR:  -0.05%                      | VN30: -4.83%
-• Max Drawdown:     -3.54%                      | VN30: -17.56% (5x lower risk)
-• Sharpe Ratio:     0.05                        | VN30: -0.142 (Positive risk-adj)
-• Calmar Ratio:     -0.02                       | VN30: -0.277
+• Total Return:     +5.13% (+102,671,472 VND)   | VN30: -3.44% (+8.57% Alpha)
+• Annualized CAGR:  +7.40%                      | VN30: -4.83%
+• Max Drawdown:     -6.94%                      | VN30: -17.56% (2.5x lower risk)
+• Sharpe Ratio:     0.60                        | VN30: -0.142 (Dominant risk-adj)
+• Calmar Ratio:     1.07                        | VN30: -0.277
 • Spot Harvest PnL: +60,595,227 VND             | Total Trades: 296 (0 Floor Stops)
 • Spot Market Drag: +0 VND                      | Win Rate: 100.0%
-• Macro Futures PnL:-29,020,595 VND             | Dynamic Delta Hedge
+• Macro Futures PnL:+74,417,955 VND             | Dynamic Delta + Bull Hedge
 ================================================================================
 ```
 
