@@ -1,0 +1,19 @@
+-- SQL Query template to fetch VN30 equity constituents and VN30F1M intraday bars
+-- Database: algotradeDB (PostgreSQL)
+-- Schema: quote
+SELECT 
+    t.tradingdate,
+    t.time,
+    t.tickersymbol,
+    t.open,
+    t.high,
+    t.low,
+    t.close,
+    t.volume
+FROM quote.intraday_bars_30m t
+WHERE t.tickersymbol IN (
+    SELECT DISTINCT tickersymbol 
+    FROM quote.vn30_constituents
+)
+AND t.tradingdate >= '2021-01-01'
+ORDER BY t.tradingdate ASC, t.time ASC;

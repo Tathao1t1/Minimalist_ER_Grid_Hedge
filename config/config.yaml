@@ -1,0 +1,51 @@
+data:
+  fetch_data: false
+  holdout:
+    end_date: '2026-10-01'
+    start_date: '2026-01-01'
+  holdout_file: data/forward_holdout/forward_holdout_30m.parquet
+  in_sample:
+    end_date: '2024-01-01'
+    start_date: '2021-01-01'
+  in_sample_file: data/in_sample/in_sample_30m.parquet
+  out_sample:
+    end_date: '2025-01-01'
+    start_date: '2024-01-01'
+  out_sample_file: data/out_of_sample/out_of_sample_30m.parquet
+  save_fetched_data: false
+  vn30_daily_file: data/benchmark/vn30_daily.parquet
+  vn30f_file: data/benchmark/vn30f1m_30m.parquet
+optimization:
+  grid_spacing_pct_range:
+  - 0.014
+  - 0.022
+  metric: sharpe_ratio
+  n_levels_range:
+  - 14
+  - 22
+  n_trials: 50
+  n_vn30f_contracts_range:
+  - 6
+  - 14
+results:
+  base_directory: results
+strategy:
+  broker_fee: 0.0015
+  capital: 2000000000
+  contract_value: 100000
+  futures_fee: 0.0005
+  grid_spacing_pct: 0.018
+  hedge_buffer_capital: 1000000000
+  initial_spot_capital: 1000000000
+  macro_roc_days: 20
+  macro_roc_threshold: -0.02
+  macro_sma_days: 50
+  margin_rate: 0.2
+  n_levels: 18
+  n_vn30f_contracts: 10
+  selection_lookback: 40
+  selection_rebalance_days: 10
+  sell_tax: 0.001
+  slippage: 0.0005
+  stop_buffer_levels: 2
+  top_k: 4

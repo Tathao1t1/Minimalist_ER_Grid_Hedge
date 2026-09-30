@@ -1,0 +1,51 @@
+{
+    "name": "Minimalist Kaufman ER Grid + Macro Futures Overlay",
+    "hypothesis_id": "minimalist_er_grid_hedge",
+    "version": "1.0-production",
+    "description": "Zero-overlap Kaufman Efficiency Ratio (ER) non-parametric equity selection (1 parameter, lookback 40d) combined with 15-18 level geometric oscillation grid and macro trend-following VN30F futures overlay to eliminate secular bear market drag.",
+    "parameters": {
+        "selection_metric": "kaufman_efficiency_ratio",
+        "selection_lookback_days": 40,
+        "selection_rebalance_days": 10,
+        "selection_top_k": 4,
+        "n_levels": 18,
+        "grid_spacing_pct": 0.018,
+        "stop_buffer_levels": 2,
+        "initial_spot_capital": 1000000000,
+        "hedge_buffer_capital": 1000000000,
+        "total_fund_capital": 2000000000,
+        "macro_sma_days": 50,
+        "macro_roc_days": 20,
+        "macro_roc_threshold": -0.02,
+        "n_vn30f_contracts": 10,
+        "broker_fee_bps": 15,
+        "sell_tax_bps": 10,
+        "futures_fee_bps": 5,
+        "slippage_bps": 5
+    },
+    "in_sample_performance": {
+        "period": "2021-01 to 2023-12",
+        "total_return": 0.4179,
+        "cagr": 0.1256,
+        "max_drawdown": -0.1456,
+        "sharpe_ratio": 0.648,
+        "calmar_ratio": 0.863,
+        "gate_1_status": "PASSED"
+    },
+    "optimization_plateau": {
+        "combinations_tested": 27,
+        "profitable_combinations": 27,
+        "profitability_rate": 1.0,
+        "plateau_stability_ratio": 0.707,
+        "gate_2_status": "PASSED"
+    },
+    "out_of_sample_performance": {
+        "period": "2024-01 to 2024-12",
+        "total_return": 0.1480,
+        "cagr": 0.1485,
+        "max_drawdown": -0.0293,
+        "sharpe_ratio": 1.987,
+        "calmar_ratio": 5.077,
+        "gate_3_status": "PASSED"
+    }
+}
