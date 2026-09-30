@@ -36,6 +36,8 @@ strategy:
   futures_fee: 0.0005
   grid_spacing_pct: 0.018
   hedge_buffer_capital: 1000000000
+  hedging_direction: short_only
+  hedging_mode: dynamic_delta_hedge
   initial_spot_capital: 1000000000
   macro_roc_days: 20
   macro_roc_threshold: -0.02

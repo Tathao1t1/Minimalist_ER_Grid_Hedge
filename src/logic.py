@@ -108,7 +108,9 @@ class MinimalistERGridBacktest:
         macro_sma_days=50,
         macro_roc_days=20,
         macro_roc_threshold=-0.02,
-        n_vn30f_contracts=10
+        n_vn30f_contracts=10,
+        hedging_mode='dynamic_delta_hedge',
+        hedging_direction='short_only'
     ):
         self.capital = capital
         self.initial_spot_capital = initial_spot_capital
@@ -131,6 +133,8 @@ class MinimalistERGridBacktest:
         self.macro_roc_days = macro_roc_days
         self.macro_roc_threshold = macro_roc_threshold
         self.n_vn30f_contracts = n_vn30f_contracts
+        self.hedging_mode = hedging_mode
+        self.hedging_direction = hedging_direction
         
         self.trades = []
         self.equity_series = None
@@ -306,24 +310,31 @@ class MinimalistERGridBacktest:
                 sum(p['shares'] * float(bar_group.loc[t]['close']) for p in lvl_dict.values())
                 for t, lvl_dict in positions.items() if t in bar_group.index
             )
-            equity_curve.append({'bar_close': ts, 'spot_equity': cash + pos_val})
+            equity_curve.append({'bar_close': ts, 'spot_equity': cash + pos_val, 'pos_val': pos_val})
             
         trades_df = pd.DataFrame(completed_trades)
         eq_df = pd.DataFrame(equity_curve)
         eq_series = eq_df.set_index(pd.to_datetime(eq_df['bar_close']))['spot_equity']
+        pos_val_series = eq_df.set_index(pd.to_datetime(eq_df['bar_close']))['pos_val']
         
         # 5. Macro Futures Hedge Overlay
         date_col = 'datetime' if 'datetime' in vn30_daily.columns else 'bar_close'
-        vd = vn30_daily[(pd.to_datetime(vn30_daily[date_col]) >= start_dt) & (pd.to_datetime(vn30_daily[date_col]) < end_dt)].copy()
+        vd = vn30_daily.sort_values(date_col).copy()
         vd['date'] = pd.to_datetime(vd[date_col]).dt.date
         vd['sma50'] = vd['close'].rolling(self.macro_sma_days).mean()
         vd['roc20'] = vd['close'].pct_change(self.macro_roc_days)
-        vd['is_bear'] = (vd['close'] < vd['sma50']) & (vd['roc20'] < self.macro_roc_threshold)
-        vd['is_bull'] = (vd['close'] > vd['sma50']) & (vd['roc20'] > 0)
+        
+        # Strictly zero lookahead: lagged by 1 day (shift(1))
+        # Yesterday's closing auction determines today's defensive hedge status
+        vd['is_bear'] = ((vd['close'] < vd['sma50']) & (vd['roc20'] < self.macro_roc_threshold)).shift(1).fillna(False)
+        vd['is_bull'] = ((vd['close'] > vd['sma50']) & (vd['roc20'] > 0)).shift(1).fillna(False)
         reg_map = vd.set_index('date')[['is_bear', 'is_bull']].to_dict('index')
         
         f_df = vn30f_bars[(vn30f_bars['bar_close'] >= start_dt) & (vn30f_bars['bar_close'] < end_dt)].sort_values('bar_close').reset_index(drop=True)
         f_df['date'] = pd.to_datetime(f_df['bar_close']).dt.date
+        
+        # Align open inventory valuation to futures timestamps
+        pos_val_aligned = pos_val_series.reindex(pd.to_datetime(f_df['bar_close']), method='ffill').fillna(0).values
         
         cur_pos = 0
         cum_pnl = 0.0
@@ -331,19 +342,43 @@ class MinimalistERGridBacktest:
         closes_f = f_df['close'].values
         dates_f = f_df['date'].values
         ts_f = pd.to_datetime(f_df['bar_close']).values
-        n_c = self.n_vn30f_contracts
+        max_c = self.n_vn30f_contracts
         pv = self.contract_value
         ff = self.futures_fee
         
         for i in range(len(f_df)):
             d = dates_f[i]
             reg = reg_map.get(d, {'is_bear': False, 'is_bull': False})
-            t_pos = -1 if reg['is_bear'] else (+1 if reg['is_bull'] else 0)
+            open_inv = pos_val_aligned[i]
+            
+            if self.hedging_mode == 'dynamic_delta_hedge':
+                # Approach 1: True Dynamic Delta-Neutral Defensive Hedge
+                # Sizing: Short contracts scale dynamically with open inventory at risk
+                # Zero naked longs / zero speculative leverage in bull or neutral regimes
+                if reg['is_bear'] and open_inv > 0:
+                    contract_notional = closes_f[i] * pv
+                    target_contracts = -min(max_c, int(round(open_inv / contract_notional)))
+                else:
+                    target_contracts = 0
+            elif self.hedging_mode == 'unhedged':
+                target_contracts = 0
+            elif self.hedging_mode == 'macro_cta':
+                # Approach 2: Bi-Directional CTA Momentum Overlay
+                target_contracts = -max_c if reg['is_bear'] else (+max_c if reg['is_bull'] else 0)
+            elif self.hedging_mode == 'legacy':
+                # Unlagged legacy model for audit comparison
+                is_bear_m0 = (vd.set_index('date')['close'] < vd.set_index('date')['sma50']) & (vd.set_index('date')['roc20'] < self.macro_roc_threshold)
+                is_bull_m0 = (vd.set_index('date')['close'] > vd.set_index('date')['sma50']) & (vd.set_index('date')['roc20'] > 0)
+                reg_m0 = {'is_bear': is_bear_m0.get(d, False), 'is_bull': is_bull_m0.get(d, False)}
+                target_contracts = -max_c if reg_m0['is_bear'] else (+max_c if reg_m0['is_bull'] else 0)
+            else:
+                target_contracts = 0
+                
             if i > 0 and cur_pos != 0:
-                cum_pnl += cur_pos * n_c * (closes_f[i] - closes_f[i-1]) * pv
-            if t_pos != cur_pos:
-                cum_pnl -= abs(t_pos - cur_pos) * n_c * closes_f[i] * pv * ff
-                cur_pos = t_pos
+                cum_pnl += cur_pos * (closes_f[i] - closes_f[i-1]) * pv
+            if target_contracts != cur_pos:
+                cum_pnl -= abs(target_contracts - cur_pos) * closes_f[i] * pv * ff
+                cur_pos = target_contracts
             f_hist.append({'bar_close': ts_f[i], 'hedge_pnl': cum_pnl})
             
         f_series = pd.DataFrame(f_hist).set_index('bar_close')['hedge_pnl']
