@@ -64,7 +64,7 @@ The strategy operates on a three-tier modular quantitative pipeline:
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1. Minimalist Kaufman ER Selection
+### Step 1: Hypothesis Formulation & Non-Parametric ER Selection
 To prevent overfitting, we discard complex multi-factor indicators and employ only the **Kaufman Efficiency Ratio (ER)**:
 
 $$\text{ER} = \frac{|\text{Price}_t - \text{Price}_{t-n}|}{\sum_{i=1}^n |\text{Price}_i - \text{Price}_{i-1}|}$$
@@ -74,7 +74,7 @@ $$\text{ER} = \frac{|\text{Price}_t - \text{Price}_{t-n}|}{\sum_{i=1}^n |\text{P
 
 Every 10 trading days, the top 4 constituents with the lowest 40-day ER are selected.
 
-### 2. Empirical Proof: Take Profit Normal Distribution ($R^2 = 0.964$)
+### Step 2: Mathematical Proof of Correct Grid Implementation ($R^2 = 0.964$)
 A correct grid implementation must exhibit a bell-shaped Gaussian normal distribution of take-profit executions across grid depths. If executions concentrate solely at level 1, the grid is ineffective; if executions skew erratically, the spacing is miscalibrated.
 
 ![Take Profit Normal Distribution](images/grid_normal_distribution_proof.png)
@@ -85,11 +85,52 @@ Our empirical verification confirmed:
 - **Gaussian Fit Goodness-of-Fit ($R^2$)**: **0.9643**
 - **Floor Stop Breach Rate**: **0.00%** (100% win rate across oscillation harvests)
 
-### 3. Macro Futures Overlay
-Secular bear markets (e.g. 2022's -35% crash) create inventory drag on long stock positions. We deploy a macro trend filter on the VN30 index:
-- **Bear Regime** ($\text{Close} < \text{SMA}_{50}$ and $\text{ROC}_{20} < -2\%$): Short 10 VN30F1M contracts.
-- **Bull Regime** ($\text{Close} > \text{SMA}_{50}$ and $\text{ROC}_{20} > 0\%$): Long 10 VN30F1M contracts.
-- **Neutral Regime**: 0 contracts (Cash).
+### Step 3: Forming Set of Quantitative Rules
+
+The formal rules governing the strategy are defined below:
+
+#### 1. Initial Capital Allocation
+- **Total Fund Capital**: **2,000,000,000 VND**
+- **Spot Grid Capital**: **1,000,000,000 VND** (50% of fund) dedicated to equity inventory accumulation and oscillation harvesting.
+- **Futures Hedge Reserve**: **1,000,000,000 VND** (50% of fund) held as cash reserve for VN30F margin requirements and mark-to-market daily settlement cushions.
+
+#### 2. Entry Rule
+- **Universe Filter**: Active constituents of the VN30 equity index.
+- **Rolling Selection**: Kaufman ER evaluated over a lookback of $N = 40$ trading days. Whitelist rebalanced every $M = 10$ trading days with zero lookahead bias. The top $K = 4$ stocks with the lowest ER are selected.
+- **Anchor Baseline**: For each selected ticker, the anchor price $S$ is set to its 50-period 30-minute SMA ($SMA_{50}$).
+- **Geometric Grid Generation**: 18 buy limit levels spaced at $1.8\%$ intervals:
+  $$\text{Level}_k = S \times (1 - k \times 0.018), \quad \text{for } k \in \{1, 2, \dots, 18\}$$
+- **Execution Trigger**: When a 30m bar low reaches $\text{Low} \le \text{Level}_k$ and level $k$ is not currently occupied, place and execute a limit buy order.
+
+#### 3. Exit Rule
+- **Take-Profit (TP)**: Each filled level $k$ immediately places a limit sell order at the adjacent upper grid level:
+  $$\text{TP}_k = S \times (1 - (k - 1) \times 0.018)$$
+- **T+2.5 Settlement Guard**: In compliance with Vietnam regulations, positions cannot be sold until $T+2$ trading days at 13:00 PM. Take-profit orders are only eligible for execution once settlement is satisfied.
+- **True Level Recycling**: Upon fill of $\text{TP}_k$, level $k$ is fully recycled and immediately available to absorb subsequent downward oscillations.
+- **Floor Stop Loss**: Hard risk stop placed 2 buffer levels below the 18th level:
+  $$\text{Stop} = S \times (1 - (18 + 2) \times 0.018) = S \times 0.640$$
+  If intraday price breaches the stop level, all open inventory for that ticker is immediately liquidated.
+- **Whitelist Rotation Exit**: If a stock exits the top 4 whitelist, existing positions are allowed to harvest at target; no new levels are opened, and the ticker rotates out smoothly.
+
+#### 4. Position Sizing
+- **Capital per Stock**:
+  $$\text{Capital per Stock} = \frac{\text{Spot Capital}}{K} = \frac{1,000,000,000\text{ VND}}{4} = 250,000,000\text{ VND}$$
+- **Capital per Level**:
+  $$\text{Capital per Level} = \frac{250,000,000\text{ VND}}{18} \approx 13,888,889\text{ VND}$$
+- **Statutory Lot Rounding**: Share quantities are rounded to the nearest 100-share board lot with a 100-share floor:
+  $$\text{Shares}_k = \max\left(100, \left\lfloor \frac{\text{Capital per Level}}{\text{Fill Price} \times 100} + 0.5 \right\rfloor \times 100\right)$$
+
+#### 5. Execution Logic & Macro Futures Overlay
+- **Transaction Costs & Friction**:
+  - Brokerage fee: **15 bps** (0.15%) on all buys and sells.
+  - Government sales tax: **10 bps** (0.10%) on sells.
+  - Execution slippage: **5 bps** (0.05%) on all fills.
+  - Futures exchange fee: **5 bps** (0.05%) per contract turnover.
+- **Macro Regime Hedging**:
+  Evaluated at each daily close on the VN30 index benchmark:
+  - **Bear Regime** ($\text{Close} < \text{SMA}_{50} \text{ and } \text{ROC}_{20} < -2\%$): Short 10 VN30F1M contracts ($10 \times 100,000$ VND/point multiplier) to eliminate secular bear drag.
+  - **Bull Regime** ($\text{Close} > \text{SMA}_{50} \text{ and } \text{ROC}_{20} > 0\%$): Long 10 VN30F1M contracts to capture macro momentum.
+  - **Neutral Regime** (Otherwise): 0 contracts (flat cash reserve).
 
 ---
 
@@ -106,8 +147,7 @@ The program consumes high-precision 30-minute candlestick data and daily benchma
 | `data/benchmark/vn30_daily.parquet` | Continuous 2021–2026 | 1,923 bars | VN30 benchmark daily index closes |
 
 ### Database Ingestion (Optional)
-To fetch live or updated data directly from `algotradeDB`
-   ```
+To fetch live or updated data directly from `algotradeDB`:
 1. Custom SQL queries can be edited in `data/query.txt`.
 2. In `config/config.yaml`, set `fetch_data: true`.
 
