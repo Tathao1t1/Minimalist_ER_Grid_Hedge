@@ -191,7 +191,7 @@ To ensure 100% compliance with institutional quantitative standards (CFA Institu
 - **Futures Hedge Reserve**: **1,000,000,000 VND** (50% of total fund capital) maintained in cash buffer for initial margin requirements and mark-to-market settlement variations.
 
 #### 4. Hedging Entry & Sizing Rules
-Evaluated continuously on each 30-minute bar using yesterday's lagged daily close:
+Evaluated continuously on each 30-minute bar using yesterday's lagged daily close with strict zero-lookahead bias (`shift(1)`):
 
 - **Confirmed Bear Regime** (`VN30 Close[t-1] < SMA_50[t-1]` and `ROC_20[t-1] < -2.0%`):
   - **Dynamic Delta-Neutral Sizing**:
@@ -200,14 +200,25 @@ Evaluated continuously on each 30-minute bar using yesterday's lagged daily clos
     Target_Contracts(t) = -min(Max_Contracts, round(Open_Spot_Inventory_Value(t) / Contract_Notional(t)))
     ```
     Where `Max_Contracts = 10`. If open spot inventory is zero (`Open_Spot_Inventory_Value == 0`), the hedge holds **0 contracts**.
-- **Bull / Neutral Regime** (Otherwise):
+- **Confirmed Bull Regime** (`VN30 Close[t-1] > SMA_50[t-1]` and `ROC_20[t-1] > 0.0%`):
+  - When `hedging_direction: "both"` (Long/Bull Hedge enabled):
+    ```text
+    Target_Contracts(t) = +N_bull_contracts (+10 Contracts Long)
+    ```
+  - When `hedging_direction: "short_only"`:
+    ```text
+    Target_Contracts(t) = 0 Contracts (Flat Cash)
+    ```
+- **Neutral Regime** (Otherwise):
   - **Target Position**: Hold **0 contracts** (100% cash reserve, zero derivative exposure).
 
 ```text
-Macro Defensive Hedge Logic:
+Macro Regime Futures Hedge Logic:
 IF (VN30 Close[t-1] < SMA_50[t-1]) AND (ROC_20[t-1] < -2.0%) AND (Open_Spot_Inventory > 0):
     Contract_Notional = VN30F_Close * 100,000 VND
     Hedge_Contracts   = -min(10, round(Open_Spot_Inventory / Contract_Notional))
+ELIF (VN30 Close[t-1] > SMA_50[t-1]) AND (ROC_20[t-1] > 0.0%) AND (hedging_direction == 'both'):
+    Hedge_Contracts   = +N_bull_contracts (+10 Contracts Long)
 ELSE:
     Hedge_Contracts   = 0 Contracts (Flat Cash)
 ```
@@ -473,14 +484,32 @@ The defining strength of the **Minimalist ER Grid + Macro Futures Overlay** stra
 
 ![PnL Component Separation: Pure Grid vs Downtrend Loss vs Hedging Overlay](images/pnl_decomposition_chart.png)
 
-### 1. Empirical Component Breakdown Table (Approach 1: Quant-Compliant)
+### 1. Empirical Component Breakdown: Short-Only Defensive vs. Integrated Long Bull Hedge
 
-| Evaluation Phase | Time Period | Market Regime | Closed Spot Trades | Pure Grid Harvest | Spot Downtrend Drag | Macro Futures Hedge | Total Net PnL | Net Return (on 2B Capital) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 967 trades | **+195,859,310 VND** | **-233,372,334 VND** | **+61,821,915 VND** | **-134,084,815 VND** | **-6.70%** |
-| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **-24,208,800 VND** | **+16,840,207 VND** | **+0.84%** |
-| **Forward Holdout** | 2026 | Choppy Downward (-3.44% VN30) | 296 trades | **+60,595,227 VND** | **0 VND** | **-29,020,595 VND** | **-767,078 VND** | **-0.04%** |
-| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **+8,592,520 VND** | **-118,011,686 VND** | **-5.90%** |
+Both configurations are evaluated with strict zero-lookahead bias (daily macro regime signals shifted by 1 trading day: `shift(1)`):
+
+#### Configuration A: Approach 1 (Short-Only Defensive Hedge — Institutional Standard)
+- **Bear Regime**: Dynamic delta-neutral sizing ($N_t = -\min(10, \text{round}(\text{Open\_Spot\_Inventory}_t / \text{Notional}_t))$).
+- **Bull / Neutral Regime**: 0 contracts (flat cash reserve).
+
+| Evaluation Phase | Time Period | Market Regime | Closed Spot Trades | Pure Grid Harvest | Spot Downtrend Drag | Macro Futures Hedge | Total Net PnL | Net Return (on 2B Capital) | Max Drawdown | Sharpe |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 967 trades | **+195,859,310 VND** | **-233,372,334 VND** | **+61,821,915 VND** | **-134,084,815 VND** | **-6.70%** | **-16.67%** | **0.02** |
+| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **-24,208,800 VND** | **+16,840,207 VND** | **+0.84%** | **-1.89%** | **0.29** |
+| **Forward Holdout** | 2026 | Choppy Downward (-3.44% VN30) | 296 trades | **+60,595,227 VND** | **0 VND** | **-29,020,595 VND** | **-767,078 VND** | **-0.04%** | **-3.54%** | **0.05** |
+| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **+8,592,520 VND** | **-118,011,686 VND** | **-5.90%** | **-16.67%** | **—** |
+
+#### Configuration B: Approach 1 + Long Bull Hedge (`hedging_direction: "both"`)
+- **Bear Regime**: Dynamic delta-neutral sizing ($N_t = -\min(10, \text{round}(\text{Open\_Spot\_Inventory}_t / \text{Notional}_t))$).
+- **Bull Regime**: Long +10 contracts VN30F1M ($N_t = +10$).
+- **Neutral Regime**: 0 contracts (flat cash reserve).
+
+| Evaluation Phase | Time Period | Market Regime | Closed Spot Trades | Pure Grid Harvest | Spot Downtrend Drag | Macro Futures Hedge | Total Net PnL | Net Return (on 2B Capital) | Max Drawdown | Sharpe |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 967 trades | **+195,859,310 VND** | **-233,372,334 VND** | **-151,513,235 VND** | **-347,419,965 VND** | **-17.37%** | **-34.80%** | **-0.09** |
+| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **-73,140,500 VND** | **-32,091,493 VND** | **-1.60%** | **-5.15%** | **-0.20** |
+| **Forward Holdout** | 2026 | Sustained Directional Surges | 296 trades | **+60,595,227 VND** | **0 VND** | **+74,417,955 VND** | **+102,671,472 VND** | **+5.13%** | **-6.94%** | **0.60** |
+| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **-150,235,780 VND** | **-276,839,986 VND** | **-13.84%** | **-34.80%** | **—** |
 
 ---
 

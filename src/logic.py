@@ -109,8 +109,9 @@ class MinimalistERGridBacktest:
         macro_roc_days=20,
         macro_roc_threshold=-0.02,
         n_vn30f_contracts=10,
+        n_bull_contracts=None,
         hedging_mode='dynamic_delta_hedge',
-        hedging_direction='short_only'
+        hedging_direction='both'
     ):
         self.capital = capital
         self.initial_spot_capital = initial_spot_capital
@@ -133,6 +134,7 @@ class MinimalistERGridBacktest:
         self.macro_roc_days = macro_roc_days
         self.macro_roc_threshold = macro_roc_threshold
         self.n_vn30f_contracts = n_vn30f_contracts
+        self.n_bull_contracts = n_bull_contracts
         self.hedging_mode = hedging_mode
         self.hedging_direction = hedging_direction
         
@@ -352,12 +354,16 @@ class MinimalistERGridBacktest:
             open_inv = pos_val_aligned[i]
             
             if self.hedging_mode == 'dynamic_delta_hedge':
-                # Approach 1: True Dynamic Delta-Neutral Defensive Hedge
-                # Sizing: Short contracts scale dynamically with open inventory at risk
-                # Zero naked longs / zero speculative leverage in bull or neutral regimes
-                if reg['is_bear'] and open_inv > 0:
+                # Approach 1: Dynamic Delta-Neutral Defensive Short + Bull Trend Hedge
+                can_short = self.hedging_direction in ['short_only', 'both', 'long_short', 'bull_bear']
+                can_long = self.hedging_direction in ['long_only', 'both', 'long_short', 'bull_bear']
+                bull_c = self.n_bull_contracts if self.n_bull_contracts is not None else max_c
+                
+                if reg['is_bear'] and open_inv > 0 and can_short:
                     contract_notional = closes_f[i] * pv
                     target_contracts = -min(max_c, int(round(open_inv / contract_notional)))
+                elif reg['is_bull'] and can_long:
+                    target_contracts = +bull_c
                 else:
                     target_contracts = 0
             elif self.hedging_mode == 'unhedged':

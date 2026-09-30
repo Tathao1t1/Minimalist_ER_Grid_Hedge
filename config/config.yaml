@@ -36,7 +36,7 @@ strategy:
   futures_fee: 0.0005
   grid_spacing_pct: 0.018
   hedge_buffer_capital: 1000000000
-  hedging_direction: short_only
+  hedging_direction: both
   hedging_mode: dynamic_delta_hedge
   initial_spot_capital: 1000000000
   macro_roc_days: 20
@@ -45,6 +45,7 @@ strategy:
   margin_rate: 0.2
   n_levels: 18
   n_vn30f_contracts: 10
+  n_bull_contracts: 10
   selection_lookback: 40
   selection_rebalance_days: 10
   sell_tax: 0.001
