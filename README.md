@@ -10,7 +10,7 @@ Grid trading algorithms excel in oscillating, mean-reverting environments by har
 
 This repository presents the **Minimalist ER Grid Trading Strategy with Macro Futures Overlay**. Our solution resolves both vulnerabilities through:
 1. **Non-Parametric Stock Selection**: A single-parameter (lookback = 40 days) **Kaufman Efficiency Ratio (ER)** filter that mathematically isolates the most oscillating, lowest-friction mean-reverting constituents of the VN30 index without parameter proliferation.
-2. **True Geometric Grid Recycling**: An 18-level geometric grid with take-profit limit orders placed at adjacent upper levels, verified empirically to produce a **statistically proven Gaussian Normal Distribution ($R^2 = 0.964$)** of oscillation harvests.
+2. **True Geometric Grid Recycling**: An 18-level geometric grid with take-profit limit orders placed at adjacent upper levels, verified empirically to produce a **statistically proven Gaussian Normal Distribution (R² = 0.964)** of oscillation harvests.
 3. **Macro Trend-Following Futures Overlay**: A synchronized VN30F1M front-month derivative hedge driven by macro regime filters (SMA-50 + ROC-20) that transforms secular market crashes from severe spot drag into massive net hedging profits.
 
 Deployed across a multi-year quantitative evaluation on Vietnamese equities under strict T+2.5 settlement and statutory fee rules, the strategy achieved **+41.79% in-sample return**, **+14.80% out-of-sample return (Sharpe 1.987, MaxDD -2.93%)**, and emerged as the **Undisputed Champion in the 2026 Blind Forward Holdout Tournament with +9.30% return vs. the VN30 benchmark (-3.44%)**, achieving **296 spot harvests with zero floor stops (100% win rate)**.
@@ -22,9 +22,9 @@ Deployed across a multi-year quantitative evaluation on Vietnamese equities unde
 In algorithmic trading, grid strategies operate by placing layered buy and sell orders at regular intervals around a baseline anchor price. Unlike directional trend-following systems that require predicting future price direction, grid algorithms profit directly from price fluctuations and volatility. 
 
 Vietnam's equity market presents distinctive structural characteristics:
-- **T+2.5 Settlement**: Equities purchased on day $T$ can only be sold in the afternoon session of $T+2$, demanding disciplined cash-flow management and level isolation.
+- **T+2.5 Settlement**: Equities purchased on day `T` can only be sold in the afternoon session of `T+2`, demanding disciplined cash-flow management and level isolation.
 - **HOSE Statutory Costs**: 15 bps brokerage commission and 10 bps government sales tax require grid spacing to be sufficiently wide to exceed round-trip friction.
-- **Derivative Instrument Alignment**: The front-month VN30F1M futures contract operates on $T+0$ settlement with high liquidity, providing an ideal instrument for dynamic macro risk hedging.
+- **Derivative Instrument Alignment**: The front-month VN30F1M futures contract operates on `T+0` settlement with high liquidity, providing an ideal instrument for dynamic macro risk hedging.
 
 While standard grid strategies collapse when an asset enters a prolonged secular decline, our architecture decouples high-frequency oscillation profits from market-wide macro risk through an institutional fund design combining a **1,000,000,000 VND spot allocation** with a **1,000,000,000 VND futures reserve buffer** (Total Fund Capital = 2,000,000,000 VND).
 
@@ -69,22 +69,24 @@ The **Minimalist ER Grid + Macro Futures Hedge** hypothesis solves these through
 ### 1.1 Non-Parametric Kaufman ER Selection
 To prevent overfitting, we discard complex multi-factor indicators and employ only the **Kaufman Efficiency Ratio (ER)**:
 
-$$\text{ER} = \frac{|\text{Price}_t - \text{Price}_{t-n}|}{\sum_{i=1}^n |\text{Price}_i - \text{Price}_{i-1}|}$$
+```text
+ER = |Price(t) - Price(t-n)| / SUM[ |Price(i) - Price(i-1)| ]
+```
 
-- $\text{ER} \to 1.0$: Pure unidirectional trend (avoid for grid trading).
-- $\text{ER} \to 0.0$: Pure mean-reverting oscillation with maximum price path length and minimum net displacement.
+- `ER -> 1.0`: Pure unidirectional trend (avoid for grid trading).
+- `ER -> 0.0`: Pure mean-reverting oscillation with maximum price path length and minimum net displacement.
 
 Every 10 trading days, the top 4 constituents with the lowest 40-day ER are selected into the active portfolio whitelist with zero lookahead bias.
 
-### 1.2 Mathematical & Empirical Proof: Take Profit Normal Distribution ($R^2 = 0.964$)
+### 1.2 Mathematical & Empirical Proof: Take Profit Normal Distribution (R² = 0.964)
 A theoretically correct grid implementation must exhibit a bell-shaped Gaussian normal distribution of take-profit executions across grid depths. If executions concentrate solely at level 1, the grid is ineffective; if executions skew erratically, the spacing is miscalibrated.
 
 ![Take Profit Normal Distribution](images/grid_normal_distribution_proof.png)
 
 Our empirical verification confirmed:
 - **Mean Active Depth**: Level 8.94
-- **Standard Deviation ($\sigma$)**: 3.61 levels
-- **Gaussian Fit Goodness-of-Fit ($R^2$)**: **0.9643**
+- **Standard Deviation (σ)**: 3.61 levels
+- **Gaussian Fit Goodness-of-Fit (R²)**: **0.9643**
 - **Floor Stop Breach Rate**: **0.00%** (100% win rate across oscillation harvests)
 
 ---
@@ -129,29 +131,41 @@ To bridge theoretical abstraction into an executable trading algorithm, we defin
 
 #### 2. Entry Rules
 - **Universe Filter**: Active constituents of the VN30 equity index.
-- **Rolling Whitelist Selection**: Kaufman ER evaluated over a lookback of $N = 40$ trading days. Whitelist rebalanced every $M = 10$ trading days with zero lookahead bias. The top $K = 4$ stocks with the lowest ER are selected.
-- **Anchor Baseline**: For each selected ticker, the anchor price $S$ is set to its 50-period 30-minute SMA ($\text{SMA}_{50}$).
+- **Rolling Whitelist Selection**: Kaufman ER evaluated over a lookback of `N = 40` trading days. Whitelist rebalanced every `M = 10` trading days with zero lookahead bias. The top `K = 4` stocks with the lowest ER are selected.
+- **Anchor Baseline**: For each selected ticker, the anchor price `S` is set to its 50-period 30-minute SMA (`SMA_50`).
 - **Geometric Grid Generation**: 18 buy limit levels spaced at 1.8% intervals:
-  $$\text{Level}_k = S \times (1 - k \times 0.018), \quad \text{for } k \in \{1, 2, \dots, 18\}$$
-- **Execution Trigger**: When a 30m bar low reaches $\text{Low} \le \text{Level}_k$ and level $k$ is not currently occupied, execute a limit buy order.
+  ```text
+  Level[k] = Anchor_Price * (1 - k * 0.018),  for k in {1, 2, ..., 18}
+  ```
+- **Execution Trigger**: When a 30m bar low reaches `Low <= Level[k]` and level `k` is not currently occupied, execute a limit buy order.
 
 #### 3. Exit Rules
-- **Take-Profit (TP)**: Each filled level $k$ immediately places a limit sell order at the adjacent upper grid level:
-  $$\text{TP}_k = S \times (1 - (k - 1) \times 0.018)$$
-- **T+2.5 Settlement Guard**: In compliance with Vietnam regulations, positions cannot be sold until $T+2$ trading days at 13:00 PM. Take-profit orders are only eligible for execution once settlement is satisfied.
-- **True Level Recycling**: Upon fill of $\text{TP}_k$, level $k$ is fully recycled and immediately available to absorb subsequent downward oscillations.
+- **Take-Profit (TP)**: Each filled level `k` immediately places a limit sell order at the adjacent upper grid level:
+  ```text
+  TP[k] = Anchor_Price * (1 - (k - 1) * 0.018)
+  ```
+- **T+2.5 Settlement Guard**: In compliance with Vietnam regulations, positions cannot be sold until T+2 trading days at 13:00 PM. Take-profit orders are only eligible for execution once settlement is satisfied.
+- **True Level Recycling**: Upon fill of `TP[k]`, level `k` is fully recycled and immediately available to absorb subsequent downward oscillations.
 - **Floor Stop Loss**: Hard risk stop placed 2 buffer levels below the 18th level:
-  $$\text{Stop} = S \times (1 - (18 + 2) \times 0.018) = S \times 0.640$$
+  ```text
+  Stop_Price = Anchor_Price * (1 - (18 + 2) * 0.018) = Anchor_Price * 0.640
+  ```
   If intraday price breaches the stop level, all open inventory for that ticker is immediately liquidated.
 - **Whitelist Rotation Exit**: If a stock exits the top 4 whitelist, existing positions are allowed to harvest at target; no new levels are opened, and the ticker rotates out smoothly.
 
 #### 4. Position Sizing
 - **Capital per Stock**:
-  $$\text{Capital per Stock} = \frac{\text{Spot Capital}}{K} = \frac{1,000,000,000\text{ VND}}{4} = 250,000,000\text{ VND}$$
+  ```text
+  Capital per Stock = Spot Capital / K = 1,000,000,000 VND / 4 = 250,000,000 VND
+  ```
 - **Capital per Level**:
-  $$\text{Capital per Level} = \frac{250,000,000\text{ VND}}{18} \approx 13,888,889\text{ VND}$$
+  ```text
+  Capital per Level = 250,000,000 VND / 18 ≈ 13,888,889 VND
+  ```
 - **Statutory Lot Rounding**: Share quantities are rounded to the nearest 100-share board lot with a 100-share floor:
-  $$\text{Shares}_k = \max\left(100, \left\lfloor \frac{\text{Capital per Level}}{\text{Fill Price} \times 100} + 0.5 \right\rfloor \times 100\right)$$
+  ```text
+  Shares[k] = max(100, round_to_100(Capital_per_Level / Fill_Price))
+  ```
 
 #### 5. Spot Execution Logic & Cost Model
 - Brokerage fee: **15 bps** (0.15%) on all buys and sells.
@@ -164,49 +178,56 @@ To bridge theoretical abstraction into an executable trading algorithm, we defin
 
 #### 1. Hedging Instrument & Economic Rationale
 - **Instrument**: VN30F1M (Front-month VN30 index futures contract).
-- **Contract Specifications**: Multiplier of 100,000 VND per index point, $T+0$ settlement, and high market liquidity.
+- **Contract Specifications**: Multiplier of 100,000 VND per index point, T+0 settlement, and high market liquidity.
 - **Objective**: Neutralize systemic market beta during secular bear trends (e.g. 2022 crash), converting equity inventory drag into net hedging gains without interfering with localized stock oscillations.
 
 #### 2. Hedging Capital Allocation
 - **Futures Hedge Reserve**: **1,000,000,000 VND** (50% of total fund capital) maintained as cash buffer for initial margin requirements and mark-to-market daily cash settlement variations.
 
 #### 3. Hedging Entry Rules (Regime Signals)
-Evaluated at the daily close of the VN30 benchmark index:
-- **Bear Regime** ($\text{Close} \lt \text{SMA}_{50}$ and $\text{ROC}_{20} \lt -2\%$): Short 10 VN30F1M contracts.
-- **Bull Regime** ($\text{Close} \gt \text{SMA}_{50}$ and $\text{ROC}_{20} \gt 0\%$): Long 10 VN30F1M contracts.
-- **Neutral Regime** (Neither condition satisfied): 0 contracts (100% cash buffer, flat exposure).
+Evaluated at each daily close of the VN30 benchmark index:
 
-$$
-\text{Hedging Decision}_t = \begin{cases}
-\text{Bear Regime: Short 10 VN30F1M}, & \text{if } \text{Close}_t \lt \text{SMA}_{50}(t) \quad \text{and} \quad \text{ROC}_{20}(t) \lt -2\% \\[8pt]
-\text{Bull Regime: Long 10 VN30F1M}, & \text{if } \text{Close}_t \gt \text{SMA}_{50}(t) \quad \text{and} \quad \text{ROC}_{20}(t) \gt 0\% \\[8pt]
-\text{Neutral Regime: 0 Contracts (Cash Buffer)}, & \text{otherwise}
-\end{cases}
-$$
+- **Bear Regime** (`VN30 Close < SMA_50` and `ROC_20 < -2.0%`):
+  - **Action**: Open or maintain **SHORT 10 VN30F1M contracts** (neutralizes downside equity drag).
+- **Bull Regime** (`VN30 Close > SMA_50` and `ROC_20 > 0.0%`):
+  - **Action**: Open or maintain **LONG 10 VN30F1M contracts** (captures macro trend expansion).
+- **Neutral Regime** (Neither condition satisfied):
+  - **Action**: Hold **0 contracts** (100% cash reserve, zero derivative exposure).
 
-- **Technical Execution Trigger**:
-  - `Bear Hedge Trigger`: When `VN30 Close < SMA_50` and `ROC_20 < -2.0%` (downtrend confirmed by moving average breach and negative momentum acceleration), immediately establish or hold a **SHORT position of 10 VN30F1M contracts**.
-  - `Bull Exposure Trigger`: When `VN30 Close > SMA_50` and `ROC_20 > 0.0%` (uptrend confirmed by moving average support and positive momentum), establish or hold a **LONG position of 10 VN30F1M contracts**.
-  - `Neutral / Flat Trigger`: When conditions revert to normal range-bound chop without trending momentum, hold **0 contracts** in cash reserve.
+```text
+Macro Regime Signals:
+IF (VN30 Close < SMA_50) AND (ROC_20 < -2.0%):
+    Decision = Short 10 VN30F1M Contracts   # Bear Hedge Overlay
+ELIF (VN30 Close > SMA_50) AND (ROC_20 > 0.0%):
+    Decision = Long 10 VN30F1M Contracts    # Bull Macro Exposure
+ELSE:
+    Decision = 0 Contracts (Flat Cash)      # Neutral Buffer
+```
 
 #### 4. Hedging Exit Rules
 - **Transition to Neutral Regime**: If market conditions exit Bear or Bull regime thresholds without meeting opposite criteria, immediately close all open futures contracts to hold **0 contracts (flat cash)**.
 - **Contract Rollover Rule**: On the third Thursday of the expiry month, open positions are automatically rolled to the next front-month contract (VN30F2M / new VN30F1M) at the close of trading, eliminating delivery risk.
 
 #### 5. Hedging Position Sizing & Margin Safety
-- **Contract Count**: Fixed at **10 contracts** ($N = 10$).
-- **Notional Coverage**: At an index value of $\approx 1,200$, 10 contracts represent:
-  $$\text{Notional Value} = 10 \times 1,200 \times 100,000\text{ VND} = 1,200,000,000\text{ VND}$$
-  This provides a hedge ratio of $\approx 1.2\times$ against the 1,000,000,000 VND spot portfolio, delivering comprehensive beta coverage.
+- **Contract Count**: Fixed at **10 contracts** (`N = 10`).
+- **Notional Coverage**: At an index value of ~1,200, 10 contracts represent:
+  ```text
+  Notional Value = 10 contracts * 1,200 points * 100,000 VND = 1,200,000,000 VND
+  ```
+  This provides a hedge ratio of **~1.2x** against the 1,000,000,000 VND spot portfolio, delivering comprehensive beta coverage.
 - **Margin Safety**: At a 20% statutory initial margin requirement, 10 contracts require:
-  $$\text{Required Margin} = 1,200,000,000\text{ VND} \times 20\% = 240,000,000\text{ VND}$$
+  ```text
+  Required Margin = 1,200,000,000 VND * 20% = 240,000,000 VND
+  ```
   This constitutes only **24% margin utilization** of the 1,000,000,000 VND reserve, leaving a **>760,000,000 VND safety cushion** preventing any margin call or forced liquidation risk.
 
 #### 6. Hedging Execution Logic & Consolidated NAV
 - **Friction**: 5 bps (0.05%) round-turn broker/exchange fee and 5 bps execution slippage per contract transition.
 - **Consolidated Net Asset Value (NAV)**:
-  At each 30-minute timestamp $t$, the total fund valuation is consolidated as:
-  $$\text{Fund Equity}_t = \text{Spot Cash}_t + \sum \text{Spot Positions}_t + \text{Hedge Buffer Capital} + \text{Cumulative Futures PnL}_t$$
+  At each 30-minute timestamp `t`, total fund valuation is consolidated as:
+  ```text
+  Fund_Equity(t) = Spot_Cash(t) + Total_Spot_Inventory(t) + Hedge_Buffer_Capital + Cumulative_Futures_PnL(t)
+  ```
 
 ---
 
@@ -214,24 +235,33 @@ $$
 
 To evaluate grid algorithms under real-world market dynamics, consolidated portfolio performance is mathematically decoupled into three independent components:
 
-$$
-\Pi_{\text{Consolidated}} = \Pi_{\text{Pure Grid}} + \mathcal{L}_{\text{Downtrend Drag}} + \Pi_{\text{Macro Hedge}} - \mathcal{C}_{\text{Friction}}
-$$
+```text
+Consolidated Fund PnL = Pure Grid Profit + Spot Downtrend Drag + Macro Futures Overlay - Execution Costs
+```
 
-1. **Pure Grid Profit ($\Pi_{\text{Pure Grid}}$)**:
-   The cumulative cash flow harvested exclusively from closed round-trip oscillations between level $k$ and its adjacent take-profit level $k-1$:
-   $$\Pi_{\text{Pure Grid}} = \sum_{i=1}^{M_{\text{TP}}} \left( \text{Fill Price}_{\text{TP}, i} - \text{Fill Price}_{\text{Buy}, i} \right) \times \text{Shares}_i$$
-   This component is strictly non-negative ($\Pi_{\text{Pure Grid}} \ge 0$) and increases monotonically with market volatility.
+#### 1. Pure Grid Profit (`Pure_Grid_Profit`)
+- **Definition**: The cumulative cash flow harvested exclusively from closed round-trip oscillations between grid level `k` and its adjacent upper take-profit level `k - 1`.
+- **Formulation**:
+  ```text
+  Pure Grid Profit = SUM [ (TP_Fill_Price - Buy_Fill_Price) * Position_Shares ]
+  ```
+- **Behavior**: Strictly non-negative (`Pure Grid Profit >= 0`), increasing monotonically with market oscillation frequency and volatility.
 
-2. **Downtrend Loss / Spot Market Drag ($\mathcal{L}_{\text{Downtrend Drag}}$)**:
-   The mark-to-market depreciation of active equity inventory accumulated during adverse market declines:
-   $$\mathcal{L}_{\text{Downtrend Drag}} = \sum_{j \in \text{Open Levels}} (\text{Current Price}_j - \text{Fill Price}_j) \times \text{Shares}_j$$
-   During severe bear markets (e.g. the 2022 market crash of -35%), unhedged grid strategies suffer heavy negative drag ($\mathcal{L}_{\text{Downtrend Drag}} < 0$).
+#### 2. Downtrend Loss / Spot Market Drag (`Spot_Downtrend_Drag`)
+- **Definition**: The mark-to-market depreciation of active equity inventory accumulated during adverse market declines below buy levels.
+- **Formulation**:
+  ```text
+  Spot Downtrend Drag = SUM [ (Current_Market_Price - Entry_Fill_Price) * Open_Shares ]
+  ```
+- **Behavior**: In severe bear markets (such as the 2022 market crash of -35%), unhedged grid strategies suffer heavy negative drag (`Spot Downtrend Drag < 0`).
 
-3. **Macro Hedging Profit / Loss ($\Pi_{\text{Macro Hedge}}$)**:
-   The cumulative cash flow generated by the dynamic VN30F1M derivative overlay:
-   $$\Pi_{\text{Macro Hedge}} = \sum_{t=1}^{T} N_t \times (\text{Index}_t - \text{Index}_{t-1}) \times \text{Multiplier} - \text{Rollover Costs}$$
-   where $N_t = -10$ in Bear Regimes, $+10$ in Bull Regimes, and $0$ in Neutral Regimes. In bear markets, $\Pi_{\text{Macro Hedge}} \gg |\mathcal{L}_{\text{Downtrend Drag}}|$, converting catastrophic drawdowns into record net profits.
+#### 3. Macro Hedging Profit / Loss (`Macro_Hedging_PnL`)
+- **Definition**: The cumulative cash flow generated by the dynamic front-month VN30F1M derivative overlay.
+- **Formulation**:
+  ```text
+  Macro Hedging PnL = SUM [ Contracts * (Index_Close_t - Index_Close_t-1) * 100,000 VND ] - Rollover_Costs
+  ```
+- **Behavior**: Evaluated with `Contracts = -10` in Bear Regimes, `+10` in Bull Regimes, and `0` in Neutral Regimes. During bear crashes, hedging gains vastly exceed spot inventory drag (`Macro Hedging PnL >> |Spot Downtrend Drag|`), converting catastrophic drawdowns into record net profits.
 
 ---
 
