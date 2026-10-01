@@ -513,8 +513,6 @@ Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`
 
 The defining strength of the **Minimalist ER Grid + Macro Futures Overlay** strategy is the explicit mathematical decoupling of localized oscillation profits from macro market beta.
 
-![PnL Component Separation: Pure Grid vs Downtrend Loss vs Hedging Overlay](images/pnl_decomposition_chart.png)
-
 ### 1. Empirical Component Breakdown Tables
 
 All evaluations adhere to strict zero-lookahead bias (daily macro regime signals shifted by 1 trading day: `shift(1)`):
@@ -541,16 +539,6 @@ All evaluations adhere to strict zero-lookahead bias (daily macro regime signals
 | **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **-73,140,500 VND** | **-32,091,493 VND** | **-1.60%** | **-5.15%** | **-0.20** |
 | **Forward Holdout** | 2026 | Sustained Directional Surges | 296 trades | **+60,595,227 VND** | **0 VND** | **+74,417,955 VND** | **+102,671,472 VND** | **+5.13%** | **-6.94%** | **0.60** |
 | **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **-150,235,780 VND** | **-276,839,986 VND** | **-13.84%** | **-34.80%** | **—** |
-
-#### Configuration C: Legacy Unlagged Prototype Baseline (Educational Audit Reference)
-- Documented transparently for methodological completeness: uses unlagged contemporaneous daily close (`shift(0)`).
-
-| Evaluation Phase | Time Period | Market Regime | Closed Spot Trades | Pure Grid Harvest | Spot Downtrend Drag | Macro Futures Overlay | Total Net PnL | Net Return (on 2B Capital) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 967 trades | **+195,859,310 VND** | **-233,372,334 VND** | **+1,031,614,150 VND** | **+835,707,420 VND** | **+41.79%** |
-| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **+254,933,750 VND** | **+295,982,757 VND** | **+14.80%** |
-| **Forward Holdout** | 2026 | Choppy Downward (-3.44% VN30) | 296 trades | **+60,595,227 VND** | **0 VND** | **+157,817,000 VND** | **+186,070,517 VND** | **+9.30%** |
-| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **+1,444,364,900 VND** | **+1,317,760,694 VND** | **+65.89%** |
 
 ---
 
