@@ -87,7 +87,8 @@ def run_backtest(config, data_mode, output_dir):
         n_vn30f_contracts=strat_cfg.get('n_vn30f_contracts', 10),
         n_bull_contracts=strat_cfg.get('n_bull_contracts', None),
         hedging_mode=strat_cfg.get('hedging_mode', 'dynamic_delta_hedge'),
-        hedging_direction=strat_cfg.get('hedging_direction', 'both')
+        hedging_direction=strat_cfg.get('hedging_direction', 'both'),
+        trend_filter=strat_cfg.get('trend_filter', 'roc_non_negative')
     )
     
     backtest.log_file = os.path.join(output_dir, "trade_log.txt")
@@ -138,7 +139,8 @@ def objective(trial, config, data_bundle):
         n_vn30f_contracts=n_contracts,
         n_bull_contracts=strat_cfg.get('n_bull_contracts', None),
         hedging_mode=strat_cfg.get('hedging_mode', 'dynamic_delta_hedge'),
-        hedging_direction=strat_cfg.get('hedging_direction', 'both')
+        hedging_direction=strat_cfg.get('hedging_direction', 'both'),
+        trend_filter=strat_cfg.get('trend_filter', 'roc_non_negative')
     )
     
     metrics = backtest.backtest(data_bundle)

@@ -44,9 +44,10 @@ def get_settlement_dt(trade_dt: datetime) -> datetime:
     return datetime.combine(d, datetime.strptime("13:00", "%H:%M").time())
 
 
-def build_zero_overlap_whitelist(bars_df, lookback_days=40, rebalance_days=10, top_k=4):
+def build_zero_overlap_whitelist(bars_df, lookback_days=40, rebalance_days=10, top_k=4, trend_filter='roc_non_negative'):
     """
-    Generate rolling non-overlapping stock selection using Kaufman ER.
+    Generate rolling non-overlapping stock selection using Kaufman ER combined with upward drift filter.
+    Filters out secular downtrends while picking the most mean-reverting oscillating constituents.
     Rebalances strictly every rebalance_days with no lookahead bias.
     """
     daily_records = []
@@ -74,13 +75,39 @@ def build_zero_overlap_whitelist(bars_df, lookback_days=40, rebalance_days=10, t
         rebal_date = all_dates[i]
         hist_dates = all_dates[i - lookback_days : i]
         candidates = []
+        fallback = []
         for ticker in piv_close.columns:
             c_hist = piv_close.loc[hist_dates, ticker].dropna()
             if len(c_hist) < lookback_days * 0.8:
                 continue
-            candidates.append((ticker, kaufman_er(c_hist.values)))
-        candidates.sort(key=lambda x: x[1])  # Lowest ER = most oscillatory
-        whitelist[rebal_date] = [c[0] for c in candidates[:top_k]]
+            er_val = kaufman_er(c_hist.values)
+            fallback.append((ticker, er_val))
+            
+            # 'Going Up' condition: Net price displacement is non-negative over lookback
+            if trend_filter in ['roc_non_negative', 'going_up', 'upward']:
+                is_going_up = (c_hist.iloc[-1] >= c_hist.iloc[0])
+            elif trend_filter == 'sma50_above':
+                sma_val = c_hist.rolling(min(len(c_hist), 50)).mean().iloc[-1]
+                is_going_up = (c_hist.iloc[-1] >= sma_val)
+            else:
+                is_going_up = True
+                
+            if is_going_up:
+                candidates.append((ticker, er_val))
+                
+        # Sort candidates by lowest ER (mean-reverting oscillation)
+        candidates.sort(key=lambda x: x[1])
+        fallback.sort(key=lambda x: x[1])
+        
+        # Select top_k candidates; fill from fallback if fewer qualify
+        selected = [c[0] for c in candidates[:top_k]]
+        if len(selected) < top_k:
+            for f in fallback:
+                if f[0] not in selected:
+                    selected.append(f[0])
+                if len(selected) >= top_k:
+                    break
+        whitelist[rebal_date] = selected
     return whitelist
 
 
@@ -111,7 +138,8 @@ class MinimalistERGridBacktest:
         n_vn30f_contracts=10,
         n_bull_contracts=None,
         hedging_mode='dynamic_delta_hedge',
-        hedging_direction='both'
+        hedging_direction='both',
+        trend_filter='roc_non_negative'
     ):
         self.capital = capital
         self.initial_spot_capital = initial_spot_capital
@@ -126,6 +154,7 @@ class MinimalistERGridBacktest:
         self.selection_lookback = selection_lookback
         self.selection_rebalance_days = selection_rebalance_days
         self.top_k = top_k
+        self.trend_filter = trend_filter
         self.n_levels = n_levels
         self.grid_spacing_pct = grid_spacing_pct
         self.stop_buffer_levels = stop_buffer_levels
@@ -164,7 +193,8 @@ class MinimalistERGridBacktest:
             bars_df, 
             lookback_days=self.selection_lookback,
             rebalance_days=self.selection_rebalance_days,
-            top_k=self.top_k
+            top_k=self.top_k,
+            trend_filter=self.trend_filter
         )
         
         # 3. Compute anchors (50-period SMA per ticker)

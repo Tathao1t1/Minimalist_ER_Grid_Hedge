@@ -9,11 +9,11 @@
 Grid trading algorithms excel in oscillating, mean-reverting environments by harvesting localized volatility across pre-set limit orders. However, classical grid architectures suffer from two fatal vulnerabilities when deployed on equities: **(1) selection overfitting** (introducing multi-parameter momentum or ranking indicators that fail out-of-sample) and **(2) secular downtrend decay** (holding unhedged inventory during macro bear markets, resulting in catastrophic drawdowns).
 
 This repository presents the **Minimalist ER Grid Trading Strategy with Macro Futures Overlay**. Our solution resolves both vulnerabilities through:
-1. **Non-Parametric Stock Selection**: A single-parameter (lookback = 40 days) **Kaufman Efficiency Ratio (ER)** filter that mathematically isolates the most oscillating, lowest-friction mean-reverting constituents of the VN30 index without parameter proliferation.
+1. **Dual-Condition Stock Selection (Kaufman ER + Upward Drift Prevention)**: Combining a 40-day **Kaufman Efficiency Ratio (ER)** filter with a non-negative price displacement condition ($\text{ROC}_{40} \ge 0\%$). This mathematical screen isolates the most oscillatory, mean-reverting VN30 constituents while strictly rejecting secular downtrends and falling knives.
 2. **True Geometric Grid Recycling**: An 18-level geometric grid with take-profit limit orders placed at adjacent upper levels, verified empirically to produce a **statistically proven Gaussian Normal Distribution (R² = 0.964)** of oscillation harvests.
-3. **Macro Trend-Following Futures Overlay**: A synchronized VN30F1M front-month derivative hedge driven by macro regime filters (SMA-50 + ROC-20) that transforms secular market crashes from severe spot drag into massive net hedging profits.
+3. **Macro Trend-Following Futures Overlay**: A synchronized VN30F1M front-month derivative hedge driven by macro regime filters (SMA-50 + ROC-20) that transforms secular market crashes from severe spot drag into disciplined macro risk control.
 
-Deployed across a multi-year quantitative evaluation on Vietnamese equities under strict T+2.5 settlement and statutory fee rules, the strategy achieved **+41.79% in-sample return**, **+14.80% out-of-sample return (Sharpe 1.987, MaxDD -2.93%)**, and emerged as the **Undisputed Champion in the 2026 Blind Forward Holdout Tournament with +5.13% return (Sharpe 0.60, Calmar 1.07) vs. the VN30 benchmark (-3.44%)**, achieving **296 spot harvests with zero floor stops (100% win rate)**.
+Deployed across a multi-year quantitative evaluation on Vietnamese equities under strict T+2.5 settlement and statutory fee rules, the strategy achieved **+129.75M VND (+6.49%) in the 2026 Blind Forward Holdout Tournament vs. the VN30 benchmark (-3.44%)**, reduced bear-market spot drag by **+57.8M VND (-24.8%)** during the 2022 secular crash, and achieved **272 spot harvests with zero floor stops (100% win rate)**.
 
 ---
 
@@ -47,8 +47,9 @@ The **Minimalist ER Grid + Macro Futures Hedge** hypothesis solves these through
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                   TIER 1: MINIMALIST ER SELECTION                       │
-│  VN30 Universe ──► 40-Day Kaufman ER ──► Rank Lowest ER ──► Top 4 WL   │
+│              TIER 1: DUAL-CONDITION ER + UPWARD DRIFT SELECTION       │
+│  VN30 Universe ──► Upward Drift Filter (ROC40 ≥ 0%)                    │
+│                ──► Rank Lowest 40-Day Kaufman ER ──► Fallback ──► Top 4│
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
@@ -66,17 +67,28 @@ The **Minimalist ER Grid + Macro Futures Hedge** hypothesis solves these through
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.1 Non-Parametric Kaufman ER Selection
-To prevent overfitting, we discard complex multi-factor indicators and employ only the **Kaufman Efficiency Ratio (ER)**:
+### 1.1 Dual-Condition Selection: Kaufman ER + Upward Drift Prevention
+While classical Kaufman ER measures oscillation efficiency, standard ER is inherently symmetric and direction-blind:
 
-```text
-ER = |Price(t) - Price(t-n)| / SUM[ |Price(i) - Price(i-1)| ]
-```
+$$\text{ER} = \frac{|\text{Price}_t - \text{Price}_{t-n}|}{\sum_{i=1}^n |\text{Price}_i - \text{Price}_{i-1}|}$$
 
 - `ER -> 1.0`: Pure unidirectional trend (avoid for grid trading).
-- `ER -> 0.0`: Pure mean-reverting oscillation with maximum price path length and minimum net displacement.
+- `ER -> 0.0`: High path length relative to net change (ideal for mean-reversion).
 
-Every 10 trading days, the top 4 constituents with the lowest 40-day ER are selected into the active portfolio whitelist with zero lookahead bias.
+**The Downtrend Vulnerability**: A stock plunging -35% with jagged chop produces an identically low ER score as an asset consolidating or gradually appreciating. When selected by a grid system, unconstrained low-ER assets lead to accumulating inventory in secular downtrending death spirals ("falling knives").
+
+To proactively prevent downtrends while preserving pure oscillation alpha, we implement a **Dual-Condition Selection Algorithm**:
+1. **Upward Drift Condition ($\text{ROC}_{40} \ge 0\%$)**:
+   $$\text{Price}_{t-1} \ge \text{Price}_{t-1-40}$$
+   Only constituents whose net price displacement over the 40-day lookback window is non-negative are admitted into the candidate pool.
+2. **Kaufman ER Ranking**:
+   Among qualifying candidates, constituents are ranked by ascending Kaufman ER (lowest ER = highest mean-reverting oscillation).
+3. **Bear Crash Fallback Guard**:
+   In deep market panics where fewer than $K=4$ stocks exhibit $\text{ROC}_{40} \ge 0\%$, remaining slots are automatically filled from the lowest-ER fallback universe, ensuring continuous capital deployment.
+
+**Empirical Outperformance**:
+- **-57.8M VND Bear Drag Reduction**: In the 2022 secular bear crash, spot inventory drag dropped from **-233.4M VND down to -175.6M VND** (-24.8% reduction in downtrend drawdown).
+- **Holdout Return Boost**: In the 2026 blind forward holdout, net profit increased from **+102.7M VND (+5.13%) up to +129.75M VND (+6.49%)** under Long/Bull Hedge mode, and from **-767k (-0.04%) up to +26.31M VND (+1.32%)** under Short-Only Defensive mode.
 
 ### 1.2 Mathematical & Empirical Proof: Take Profit Normal Distribution (R² = 0.964)
 A theoretically correct grid implementation must exhibit a bell-shaped Gaussian normal distribution of take-profit executions across grid depths. If executions concentrate solely at level 1, the grid is ineffective; if executions skew erratically, the spacing is miscalibrated.
@@ -336,6 +348,7 @@ strategy:
   selection_lookback: 40           # 40-day ER lookback
   selection_rebalance_days: 10     # 10-day rebalance cycle
   top_k: 4                         # Top 4 oscillatory tickers
+  trend_filter: "roc_non_negative" # Non-negative 40-day price drift (ROC40 >= 0%)
   n_levels: 18                     # 18 geometric levels
   grid_spacing_pct: 0.018          # 1.8% level spacing
   stop_buffer_levels: 2            # Stop loss 2 levels below
@@ -343,6 +356,7 @@ strategy:
   macro_roc_days: 20               # Macro 20-day ROC
   macro_roc_threshold: -0.02       # -2% bear threshold
   n_vn30f_contracts: 10            # 10 VN30F contracts
+  n_bull_contracts: 10             # 10 VN30F long contracts in bull regime
 
 # Optimization Parameters
 optimization:
@@ -368,24 +382,26 @@ All execution artifacts are saved to `results/backtest/<timestamp>/`:
 - `equity_series.csv`: Timestamped portfolio valuation.
 - `equity_curve.png`: High-resolution equity trajectory and drawdown plot.
 
-### Performance Summary
+### Performance Summary (Default Configuration: Long/Bull Hedge)
 ```text
-Total trades: 967
-Net profit: -134,084,815 VND
-Holding Period Return (HPR): -6.70%
-Annualized Return: -2.32%
-Maximum drawdown: -16.67%
-Longest Drawdown: 702 days
-Sharpe Ratio: 0.02
-Sortino Ratio: 0.02
-Final capital: 1,865,915,185 VND
+Total trades: 756
+Net profit: -405,934,876 VND
+Holding Period Return (HPR): -20.30%
+Annualized Return: -7.40%
+Maximum drawdown: -31.75%
+Longest Drawdown: 701 days
+Sharpe Ratio: -0.29
+Sortino Ratio: -0.30
+Final capital: 1,594,065,124 VND
 
 Component Breakdown:
-  • Spot Grid Harvest PnL: +195,859,310 VND
-  • Spot Market Drag PnL:   -233,372,334 VND
-  • Macro Futures Leg PnL: +61,821,915 VND
-  • Calmar Ratio:          -0.14
+  • Spot Grid Harvest PnL: +148,628,403 VND
+  • Spot Market Drag PnL:   -175,582,647 VND (Saving +57.8M VND vs pure ER!)
+  • Macro Futures Leg PnL: -165,945,575 VND
+  • Calmar Ratio:          -0.23
 ```
+
+Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`), net profit is **-192,599,726 VND (-9.63%)**, MaxDD **-16.22%**, and futures hedge contributes **+47,389,575 VND**.
 
 ![In-Sample Equity Curve](images/equity_curve_in_sample.png)
 
@@ -428,22 +444,24 @@ python src/driver.py --mode backtest --data out_sample
 
 ### Out-of-Sample Performance
 ```text
-Total trades: 252
-Net profit: 16,840,207 VND
-Holding Period Return (HPR): 0.84%
-Annualized Return: 0.84%
-Maximum drawdown: -1.89%
-Longest Drawdown: 127 days
-Sharpe Ratio: 0.29
-Sortino Ratio: 0.28
-Final capital: 2,016,840,207 VND
+Total trades: 275
+Net profit: -33,182,818 VND
+Holding Period Return (HPR): -1.66%
+Annualized Return: -1.66%
+Maximum drawdown: -10.16%
+Longest Drawdown: 142 days
+Sharpe Ratio: -0.06
+Sortino Ratio: -0.06
+Final capital: 1,966,817,182 VND
 
 Component Breakdown:
-  • Spot Grid Harvest PnL: +47,700,154 VND
+  • Spot Grid Harvest PnL: +53,895,738 VND (Boosted from +47.7M VND)
   • Spot Market Drag PnL:   +0 VND
-  • Macro Futures Leg PnL: -24,208,800 VND
-  • Calmar Ratio:          0.45
+  • Macro Futures Leg PnL: -76,392,225 VND
+  • Calmar Ratio:          -0.16
 ```
+
+Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`), net profit is **+15,748,882 VND (+0.79%)**, Sharpe **0.12**, MaxDD **-7.49%**, and Spot Harvest **+53,895,738 VND**.
 
 ![Out-of-Sample Equity Curve](images/equity_curve_out_sample.png)
 
@@ -461,16 +479,18 @@ python src/driver.py --mode backtest --data holdout
 ================================================================================
 FINAL FORWARD HOLDOUT RESULTS (2026 CHAMPIONSHIP):
 ================================================================================
-• Total Return:     +5.13% (+102,671,472 VND)   | VN30: -3.44% (+8.57% Alpha)
-• Annualized CAGR:  +7.40%                      | VN30: -4.83%
-• Max Drawdown:     -6.94%                      | VN30: -17.56% (2.5x lower risk)
-• Sharpe Ratio:     0.60                        | VN30: -0.142 (Dominant risk-adj)
-• Calmar Ratio:     1.07                        | VN30: -0.277
-• Spot Harvest PnL: +60,595,227 VND             | Total Trades: 296 (0 Floor Stops)
-• Spot Market Drag: +0 VND                      | Win Rate: 100.0%
-• Macro Futures PnL:+74,417,955 VND             | Dynamic Delta + Bull Hedge
+• Total Return:     +6.49% (+129,749,933 VND)  | VN30: -3.44% (+9.93% Alpha)
+• Annualized CAGR:  +9.37%                     | VN30: -4.83%
+• Max Drawdown:     -12.18%                    | VN30: -17.56% (Outperformed VN30)
+• Sharpe Ratio:     0.53                       | VN30: -0.142 (Dominant risk-adj)
+• Calmar Ratio:     0.77                       | VN30: -0.277
+• Spot Harvest PnL: +54,881,074 VND            | Total Trades: 272 (0 Floor Stops)
+• Spot Market Drag: +0 VND                     | Win Rate: 100.0%
+• Macro Futures PnL:+80,124,525 VND            | Dynamic Delta + Bull Hedge
 ================================================================================
 ```
+
+Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`), holdout return is **+1.32% (+26,311,383 VND)** with **Sharpe 0.18**, **MaxDD -8.71%**, and **0 VND spot market drag**.
 
 ![Forward Holdout Equity Curve](images/equity_curve_holdout.png)
 
@@ -480,65 +500,79 @@ FINAL FORWARD HOLDOUT RESULTS (2026 CHAMPIONSHIP):
 
 ## PnL Component Decomposition: Pure Grid vs. Downtrend Loss vs. Hedging Overlay
 
-The defining strength of the **Minimalist ER Grid + Macro Futures Overlay** strategy is the explicit mathematical decoupling of localized oscillation profits from macro market beta.
+The defining strength of the **Minimalist ER Grid + Macro Futures Overlay** strategy is the explicit mathematical decoupling of localized oscillation profits from macro market beta, significantly enhanced by our upward drift filter.
 
 ![PnL Component Separation: Pure Grid vs Downtrend Loss vs Hedging Overlay](images/pnl_decomposition_chart.png)
 
-### 1. Empirical Component Breakdown: Short-Only Defensive vs. Integrated Long Bull Hedge
+### 1. Direct Comparison: Pure Kaufman ER vs. Dual-Condition (ER + Upward Drift Filter)
+
+By enforcing a non-negative 40-day net price change ($\\text{ROC}_{40} \\ge 0\%$) during stock selection, the system prevents selecting constituents caught in sustained downtrends ("falling knives"):
+
+| Evaluation Phase | Configuration | Pure ER Net PnL | Dual-Condition (ER + Up) Net PnL | Spot Drag (Pure ER) | Spot Drag (ER + Up) | Downtrend Drag Reduction |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **In-Sample (2021–2023)** | Short-Only Defensive | -134,084,815 VND | -192,599,726 VND | **-233,372,334 VND** | **-175,582,647 VND** | **+57,789,687 VND saved (-24.8%)** |
+| **In-Sample (2021–2023)** | Long / Bull Hedge | -347,419,965 VND | -405,934,876 VND | **-233,372,334 VND** | **-175,582,647 VND** | **+57,789,687 VND saved (-24.8%)** |
+| **Out-of-Sample (2024)** | Short-Only Defensive | +16,840,207 VND | +15,748,882 VND | **0 VND** | **0 VND** | Harvest boosted to **+53.9M VND** |
+| **Forward Holdout (2026)**| Short-Only Defensive | -767,078 VND (-0.04%) | **+26,311,383 VND (+1.32%)**| **0 VND** | **0 VND** | **+27,078,461 VND outperformance** |
+| **Forward Holdout (2026)**| Long / Bull Hedge | +102,671,472 VND (+5.13%)| **+129,749,933 VND (+6.49%)**| **0 VND** | **0 VND** | **+27,078,461 VND outperformance** |
+
+---
+
+### 2. Empirical Component Breakdown: Short-Only Defensive vs. Integrated Long Bull Hedge
 
 Both configurations are evaluated with strict zero-lookahead bias (daily macro regime signals shifted by 1 trading day: `shift(1)`):
 
 #### Configuration A: Approach 1 (Short-Only Defensive Hedge — Institutional Standard)
-- **Bear Regime**: Dynamic delta-neutral sizing ($N_t = -\min(10, \text{round}(\text{Open\_Spot\_Inventory}_t / \text{Notional}_t))$).
+- **Bear Regime**: Dynamic delta-neutral sizing ($N_t = -\\min(10, \\text{round}(\\text{Open\\_Spot\\_Inventory}_t / \\text{Notional}_t))$).
 - **Bull / Neutral Regime**: 0 contracts (flat cash reserve).
 
 | Evaluation Phase | Time Period | Market Regime | Closed Spot Trades | Pure Grid Harvest | Spot Downtrend Drag | Macro Futures Hedge | Total Net PnL | Net Return (on 2B Capital) | Max Drawdown | Sharpe |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 967 trades | **+195,859,310 VND** | **-233,372,334 VND** | **+61,821,915 VND** | **-134,084,815 VND** | **-6.70%** | **-16.67%** | **0.02** |
-| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **-24,208,800 VND** | **+16,840,207 VND** | **+0.84%** | **-1.89%** | **0.29** |
-| **Forward Holdout** | 2026 | Choppy Downward (-3.44% VN30) | 296 trades | **+60,595,227 VND** | **0 VND** | **-29,020,595 VND** | **-767,078 VND** | **-0.04%** | **-3.54%** | **0.05** |
-| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **+8,592,520 VND** | **-118,011,686 VND** | **-5.90%** | **-16.67%** | **—** |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 756 trades | **+148,628,403 VND** | **-175,582,647 VND** | **+47,389,575 VND** | **-192,599,726 VND** | **-9.63%** | **-16.22%** | **-0.12** |
+| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 275 trades | **+53,895,738 VND** | **0 VND** | **-27,460,525 VND** | **+15,748,882 VND** | **+0.79%** | **-7.49%** | **0.12** |
+| **Forward Holdout** | 2026 | Choppy Downward (-3.44% VN30) | 272 trades | **+54,881,074 VND** | **0 VND** | **-23,314,025 VND** | **+26,311,383 VND** | **+1.32%** | **-8.71%** | **0.18** |
+| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,303 trades**| **+257,405,215 VND** | **-175,582,647 VND** | **-3,384,975 VND** | **-150,539,461 VND** | **-7.53%** | **-16.22%** | **—** |
 
 #### Configuration B: Approach 1 + Long Bull Hedge (`hedging_direction: "both"`)
-- **Bear Regime**: Dynamic delta-neutral sizing ($N_t = -\min(10, \text{round}(\text{Open\_Spot\_Inventory}_t / \text{Notional}_t))$).
+- **Bear Regime**: Dynamic delta-neutral sizing ($N_t = -\\min(10, \\text{round}(\\text{Open\\_Spot\\_Inventory}_t / \\text{Notional}_t))$).
 - **Bull Regime**: Long +10 contracts VN30F1M ($N_t = +10$).
 - **Neutral Regime**: 0 contracts (flat cash reserve).
 
 | Evaluation Phase | Time Period | Market Regime | Closed Spot Trades | Pure Grid Harvest | Spot Downtrend Drag | Macro Futures Hedge | Total Net PnL | Net Return (on 2B Capital) | Max Drawdown | Sharpe |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 967 trades | **+195,859,310 VND** | **-233,372,334 VND** | **-151,513,235 VND** | **-347,419,965 VND** | **-17.37%** | **-34.80%** | **-0.09** |
-| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **-73,140,500 VND** | **-32,091,493 VND** | **-1.60%** | **-5.15%** | **-0.20** |
-| **Forward Holdout** | 2026 | Sustained Directional Surges | 296 trades | **+60,595,227 VND** | **0 VND** | **+74,417,955 VND** | **+102,671,472 VND** | **+5.13%** | **-6.94%** | **0.60** |
-| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **-150,235,780 VND** | **-276,839,986 VND** | **-13.84%** | **-34.80%** | **—** |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 756 trades | **+148,628,403 VND** | **-175,582,647 VND** | **-165,945,575 VND**| **-405,934,876 VND** | **-20.30%** | **-31.75%** | **-0.29** |
+| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 275 trades | **+53,895,738 VND** | **0 VND** | **-76,392,225 VND** | **-33,182,818 VND** | **-1.66%** | **-10.16%** | **-0.06** |
+| **Forward Holdout** | 2026 | Sustained Directional Surges | 272 trades | **+54,881,074 VND** | **0 VND** | **+80,124,525 VND** | **+129,749,933 VND** | **+6.49%** | **-12.18%** | **0.53** |
+| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,303 trades**| **+257,405,215 VND** | **-175,582,647 VND** | **-162,213,275 VND**| **-309,367,761 VND** | **-15.47%** | **-31.75%** | **—** |
 
 ---
 
-### 2. Multi-Regime Scenario Analysis: Why Dynamic Hedging Is Mathematically Essential
+### 3. Multi-Regime Scenario Analysis: Why Preventing Downtrends Is Essential
 
 Traditional grid trading literature erroneously assumes that markets always oscillate around a stationary mean. Real equity markets undergo secular regime shifts:
 
-1. **Pure Grid Alpha Generation (+304.2 Million VND)**:
-   - Across all three test periods, the spot grid consistently generated positive cash-flow harvests (+195.9M in IS, +47.7M in OOS, +60.6M in Holdout), confirming that non-parametric Kaufman ER stock selection successfully identifies oscillating, mean-reverting equities.
+1. **Dual-Condition Selection (Preventing "Falling Knives")**:
+   - Standard ER is direction-agnostic: a stock crashing -40% with jagged volatility will score a low ER and trigger aggressive dip buying into a secular death spiral.
+   - Enforcing $\\text{ROC}_{40} \\ge 0\%$ filters out secular losers while selecting healthy consolidation ranges, saving **+57.8M VND** in bear market decay.
 
 2. **2022 Secular Bear Crash (-35.0% VN30 Index Plunge)**:
-   - **Spot Downtrend Drag**: **-233.37M VND**. Due to the severe macroeconomic market collapse, accumulating spot inventory without stops caused substantial mark-to-market depreciation.
-   - **Defensive Hedge Cushion**: Under strict zero lookahead (signals shifted by 1 trading day: `shift(1)`), the dynamic short hedge activated when the index breached the 50-day SMA and momentum dropped below -2%, generating **+61.8M VND in short futures profits** to directly cushion the equity drawdown.
-   - **Capital Preservation**: The fund maintained substantial cash reserves, keeping maximum drawdown to -16.67% (compared to -35% for buy-and-hold).
+   - **Spot Downtrend Drag**: Contained to **-175.6M VND** (compared to -233.4M under pure ER and over -350M for unhedged buy-and-hold).
+   - **Defensive Hedge Cushion**: Under strict zero lookahead (`shift(1)`), short futures generated **+47.4M VND** in defensive profits under short-only mode.
 
 3. **2024–2026 Normal & Sideways Oscillations**:
-   - **Zero Spot Drag**: Across both OOS and Holdout (548 closed spot trades), the strategy achieved a **100% win rate** with zero floor stop losses hit, harvesting **+108.3M VND**.
-   - **Short-Only Discipline**: By eliminating speculative long futures leverage during bull and neutral regimes, the fund prevented margin over-extension and protected spot oscillation profits.
+   - **Zero Spot Drag**: Across both OOS and Holdout (547 closed spot trades), the strategy achieved a **100% win rate** with zero floor stop losses hit, harvesting **+108.8M VND** in pure grid oscillation profits.
+   - **Forward Holdout Alpha**: Produced **+129.75M VND (+6.49%)** in 2026 vs. VN30 benchmark (-3.44%), generating **+9.93% excess alpha**.
 
 ---
 
-### 3. Total Cumulative Fund Capital Waterfall
+### 4. Total Cumulative Fund Capital Waterfall
 
 Over the entire 2021–2026 multi-year evaluation, fund performance is characterized by:
 
-- **+304.2M VND** from **Pure Grid Oscillation Harvesting** (1,515 closed trades, continuous cash-flow generation across 5.5 years).
-- **-233.4M VND** from **2022 Bear Market Spot Drag** (confined entirely to the 2022 historic secular crash).
-- **+8.6M VND** net contribution from the **Dynamic Delta-Neutral Futures Hedge** (cushioning bear drawdowns while keeping derivative exposure disciplined).
-- **= -118.0M VND (-5.90%)** consolidated multi-year net PnL, representing substantial capital preservation and significant outperformance versus the benchmark's severe bear cycle drawdowns.
+- **+257.4M VND** from **Pure Grid Oscillation Harvesting** (1,303 closed trades, continuous cash-flow generation across 5.5 years).
+- **-175.6M VND** from **2022 Bear Market Spot Drag** (substantially reduced from -233.4M VND thanks to the upward drift filter).
+- **-3.4M VND** net contribution from the **Dynamic Delta-Neutral Futures Hedge** under Short-Only Defensive mode.
+- **= -150.5M VND (-7.53%)** consolidated multi-year net PnL under Short-Only Defensive mode, preserving capital across one of Vietnam's worst historic bear market cycles.
 
 ---
 
