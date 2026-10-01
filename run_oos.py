@@ -13,7 +13,7 @@ from src.logic import MinimalistERGridBacktest
 
 def main():
     print("=" * 70)
-    print("CANDIDATE 1: MINIMALIST ER GRID + MACRO HEDGE — OUT-OF-SAMPLE (2024)")
+    print("MINIMALIST ER GRID + MACRO HEDGE — OUT-OF-SAMPLE (2024)")
     print("=" * 70)
     
     cfg_path = os.path.join(curr_dir, "config/config.yaml")

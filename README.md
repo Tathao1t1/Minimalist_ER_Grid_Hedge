@@ -498,7 +498,7 @@ FINAL FORWARD HOLDOUT RESULTS (2026 CHAMPIONSHIP):
 
 ![Forward Holdout Equity Curve](images/equity_curve_holdout.png)
 
-![Tournament Victory Comparison](images/final_holdout_tournament_results.png)
+![Forward Holdout Performance vs. VN30 Benchmark](images/final_holdout_tournament_results.png)
 
 ---
 
