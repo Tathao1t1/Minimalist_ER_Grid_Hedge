@@ -15,6 +15,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
+# Modern, clean sans-serif typography configuration for publication-grade charts
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Helvetica', 'Liberation Sans', 'sans-serif']
+plt.rcParams['axes.edgecolor'] = '#cbd5e1'
+plt.rcParams['axes.linewidth'] = 0.8
+plt.rcParams['grid.color'] = '#e2e8f0'
+
 
 def kaufman_er(prices):
     """
@@ -44,11 +51,11 @@ def get_settlement_dt(trade_dt: datetime) -> datetime:
     return datetime.combine(d, datetime.strptime("13:00", "%H:%M").time())
 
 
-def build_zero_overlap_whitelist(bars_df, lookback_days=40, rebalance_days=10, top_k=4, trend_filter='roc_non_negative'):
+def build_zero_overlap_whitelist(bars_df, lookback_days=40, rebalance_days=10, top_k=4, trend_filter='none'):
     """
-    Generate rolling non-overlapping stock selection using Kaufman ER combined with upward drift filter.
-    Filters out secular downtrends while picking the most mean-reverting oscillating constituents.
-    Rebalances strictly every rebalance_days with no lookahead bias.
+    Generate rolling non-overlapping stock selection using pure Kaufman ER.
+    Ranks constituents by lowest Kaufman ER (maximum mean-reverting oscillation).
+    Rebalances strictly every rebalance_days with zero lookahead bias.
     """
     daily_records = []
     for ticker, df in bars_df.groupby('tickersymbol'):
@@ -139,7 +146,7 @@ class MinimalistERGridBacktest:
         n_bull_contracts=None,
         hedging_mode='dynamic_delta_hedge',
         hedging_direction='both',
-        trend_filter='roc_non_negative'
+        trend_filter='none'
     ):
         self.capital = capital
         self.initial_spot_capital = initial_spot_capital

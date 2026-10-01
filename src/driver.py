@@ -20,6 +20,13 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import optuna
 
+# Modern, clean sans-serif typography configuration for publication-grade charts
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Helvetica', 'Liberation Sans', 'sans-serif']
+plt.rcParams['axes.edgecolor'] = '#cbd5e1'
+plt.rcParams['axes.linewidth'] = 0.8
+plt.rcParams['grid.color'] = '#e2e8f0'
+
 # Ensure current directory is in sys.path for local imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data_fetcher import prepare_data, resolve_path
@@ -88,7 +95,7 @@ def run_backtest(config, data_mode, output_dir):
         n_bull_contracts=strat_cfg.get('n_bull_contracts', None),
         hedging_mode=strat_cfg.get('hedging_mode', 'dynamic_delta_hedge'),
         hedging_direction=strat_cfg.get('hedging_direction', 'both'),
-        trend_filter=strat_cfg.get('trend_filter', 'roc_non_negative')
+        trend_filter=strat_cfg.get('trend_filter', 'none')
     )
     
     backtest.log_file = os.path.join(output_dir, "trade_log.txt")
@@ -140,7 +147,7 @@ def objective(trial, config, data_bundle):
         n_bull_contracts=strat_cfg.get('n_bull_contracts', None),
         hedging_mode=strat_cfg.get('hedging_mode', 'dynamic_delta_hedge'),
         hedging_direction=strat_cfg.get('hedging_direction', 'both'),
-        trend_filter=strat_cfg.get('trend_filter', 'roc_non_negative')
+        trend_filter=strat_cfg.get('trend_filter', 'none')
     )
     
     metrics = backtest.backtest(data_bundle)

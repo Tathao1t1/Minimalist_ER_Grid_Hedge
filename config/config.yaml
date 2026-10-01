@@ -52,4 +52,4 @@ strategy:
   slippage: 0.0005
   stop_buffer_levels: 2
   top_k: 4
-  trend_filter: "roc_non_negative"
+  trend_filter: "none"
