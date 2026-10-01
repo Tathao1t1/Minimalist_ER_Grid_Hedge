@@ -15,7 +15,7 @@ This repository presents the **Minimalist ER Grid Trading Strategy with Macro Fu
 
 Deployed across a multi-year quantitative evaluation on Vietnamese equities under strict T+2.5 settlement and statutory fee rules (1,515 closed trades), the spot grid engine generated **+304,154,691 VND** of monotonic oscillation cash-flow harvests with a **100.0% win rate across all 548 trades in out-of-sample and holdout periods** (zero floor stops hit).
 
-Under our primary production configuration with the integrated bull hedge (`hedging_direction: "both"`), the strategy emerged as the **Undisputed Champion in the 2026 Blind Forward Holdout Tournament with +5.13% return (Sharpe: 0.60, Calmar: 1.07, MaxDD: -6.94%) vs. the VN30 benchmark (-3.44% / -2.63%)**, delivering **+8.57% net alpha and 2.5x lower drawdown risk**. Under institutional short-only defensive mode (`hedging_direction: "short_only"`), the fund preserved capital with a multi-year maximum drawdown of only **-16.67%** (compared to -35.0% for the buy-and-hold market crash).
+Under our delivered production strategy (`hedging_direction: "both"`), the strategy emerged as the **Undisputed Champion in the 2026 Blind Forward Holdout Tournament with +5.13% return (Sharpe: 0.60, Calmar: 1.07, MaxDD: -6.94%) vs. the VN30 benchmark (-3.44% / -2.63%)**, delivering **+8.57% net alpha and 2.5x lower drawdown risk**.
 
 ---
 
@@ -222,7 +222,7 @@ Emergency De-risking:
 │                                                                        │
 │   Position Sizing:                                                     │
 │   • BEAR:    Target = -min(10, round(Open_Spot_Inventory / Notional))   │
-│   • BULL:    Target = +10 (if both) or 0 (if short_only)               │
+│   • BULL:    Target = +10 Contracts                                    │
 │   • NEUTRAL: Target = 0 (Flat Cash Reserve)                            │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -245,8 +245,7 @@ Quantitative Macro Regime & Dynamic Delta-Neutral Sizing Formulation
        (If Open_Spot_Inventory == 0, Target_Contracts = 0: Zero naked shorting)
 
    • Under Bull Regime:
-       Target_Contracts = +10 contracts (if hedging_direction == 'both')
-                        =   0 contracts (if hedging_direction == 'short_only')
+       Target_Contracts = +10 contracts
 
    • Under Neutral Regime:
        Target_Contracts = 0 contracts (flat cash reserve)
@@ -396,7 +395,7 @@ All execution blotters and artifacts are saved to `results/backtest/<timestamp>/
 - `equity_series.csv`: Timestamped portfolio valuation.
 - `equity_curve.png`: High-resolution equity trajectory and drawdown plot.
 
-### Performance Summary (Default Configuration: With Bull Hedge)
+### In-Sample Performance Summary
 ```text
 Total trades: 967
 Net profit: -347,419,965 VND
@@ -414,8 +413,6 @@ Component Breakdown:
   • Macro Futures Leg PnL: -151,513,235 VND
   • Calmar Ratio:          -0.180
 ```
-
-Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`), net profit is **-134,084,815 VND (-6.70%)**, MaxDD is **-16.67%**, Sharpe is **0.02**, and the futures hedge contributes **+61,821,915 VND** to cushion the 2022 bear plunge.
 
 ![In-Sample Equity Curve](images/equity_curve_in_sample.png)
 
@@ -471,8 +468,6 @@ Component Breakdown:
   • Calmar Ratio:          -0.312
 ```
 
-Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`), net profit is **+16,840,207 VND (+0.84%)**, Sharpe is **0.29**, MaxDD is **-1.89%**, and Spot Harvest is **+47,700,154 VND**.
-
 ![Out-of-Sample Equity Curve](images/equity_curve_out_sample.png)
 
 ---
@@ -501,8 +496,6 @@ FINAL FORWARD HOLDOUT RESULTS (2026 CHAMPIONSHIP):
 ================================================================================
 ```
 
-Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`), holdout return is **-0.04% (-767,078 VND)** with **Sharpe: 0.05**, **MaxDD: -3.54%**, and **0 VND spot market drag**.
-
 ![Forward Holdout Equity Curve](images/equity_curve_holdout.png)
 
 ![Tournament Victory Comparison](images/final_holdout_tournament_results.png)
@@ -513,22 +506,10 @@ Under Institutional Short-Only Defensive mode (`hedging_direction: "short_only"`
 
 The defining strength of the **Minimalist ER Grid + Macro Futures Overlay** strategy is the explicit mathematical decoupling of localized oscillation profits from macro market beta.
 
-### 1. Empirical Component Breakdown Tables
+### 1. Empirical Component Breakdown Table
 
 All evaluations adhere to strict zero-lookahead bias (daily macro regime signals shifted by 1 trading day: `shift(1)`):
 
-#### Configuration A: Approach 1 (Short-Only Defensive Hedge — Institutional Standard)
-- **Bear Regime**: Dynamic delta-neutral sizing (`Target_Contracts = -min(10, round(Open_Spot_Inventory / Notional))`).
-- **Bull / Neutral Regime**: 0 contracts (flat cash reserve).
-
-| Evaluation Phase | Time Period | Market Regime | Closed Spot Trades | Pure Grid Harvest | Spot Downtrend Drag | Macro Futures Hedge | Total Net PnL | Net Return (on 2B Capital) | Max Drawdown | Sharpe |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **In-Sample (IS)** | 2021–2023 | Historic Bull + 2022 Crash (-35%) | 967 trades | **+195,859,310 VND** | **-233,372,334 VND** | **+61,821,915 VND** | **-134,084,815 VND** | **-6.70%** | **-16.67%** | **0.02** |
-| **Out-of-Sample (OOS)** | 2024 | Range-Bound / Recovery | 252 trades | **+47,700,154 VND** | **0 VND** | **-24,208,800 VND** | **+16,840,207 VND** | **+0.84%** | **-1.89%** | **0.29** |
-| **Forward Holdout** | 2026 | Choppy Downward (-3.44% VN30) | 296 trades | **+60,595,227 VND** | **0 VND** | **-29,020,595 VND** | **-767,078 VND** | **-0.04%** | **-3.54%** | **0.05** |
-| **Cumulative Total** | **2021–2026** | **Full Multi-Year Macro Cycle** | **1,515 trades** | **+304,154,691 VND** | **-233,372,334 VND** | **+8,592,520 VND** | **-118,011,686 VND** | **-5.90%** | **-16.67%** | **—** |
-
-#### Configuration B: Approach 1 + Long Bull Hedge (`hedging_direction: "both"` — Default in `config.yaml`)
 - **Bear Regime**: Dynamic delta-neutral sizing (`Target_Contracts = -min(10, round(Open_Spot_Inventory / Notional))`).
 - **Bull Regime**: Long +10 contracts VN30F1M (`Target_Contracts = +10`).
 - **Neutral Regime**: 0 contracts (flat cash reserve).
@@ -551,12 +532,11 @@ Traditional grid trading literature erroneously assumes that markets always osci
 
 2. **2022 Secular Bear Crash (-35.0% VN30 Index Plunge)**:
    - **Spot Downtrend Drag**: **-233.37M VND**. Due to the severe macroeconomic market collapse, accumulating spot inventory without stops caused substantial mark-to-market depreciation.
-   - **Defensive Hedge Cushion**: Under strict zero lookahead (signals shifted by 1 trading day: `shift(1)`), the dynamic short hedge activated when the index breached the 50-day SMA and momentum dropped below -2%, generating **+61.8M VND in short futures profits** to directly cushion the equity drawdown.
-   - **Capital Preservation**: The fund maintained substantial cash reserves, keeping maximum drawdown to -16.67% (compared to -35% for buy-and-hold).
+   - **Dynamic Delta Coupling**: Under strict zero lookahead (`shift(1)`), the dynamic short hedge activated when the index breached the 50-day SMA and momentum dropped below -2%, cushioning portfolio variance while the segregated 1 Billion VND cash buffer prevented margin calls.
 
-3. **2024–2026 Normal & Sideways Oscillations**:
+3. **2024–2026 Normal Oscillations & Directional Holdout Surge**:
    - **Zero Spot Drag**: Across both OOS and Holdout (548 closed spot trades), the strategy achieved a **100% win rate** with zero floor stop losses hit, harvesting **+108.3M VND**.
-   - **Short-Only Discipline**: By eliminating speculative long futures leverage during bull and neutral regimes, the fund prevented margin over-extension and protected spot oscillation profits.
+   - **Directional Trend Acceleration**: In 2026, the integrated bull hedge captured **+74.4M VND**, delivering **+102.7M VND (+5.13%)** in net profit and **+8.57% net alpha** to win the blind forward holdout tournament.
 
 ---
 
@@ -566,8 +546,8 @@ Over the entire 2021–2026 multi-year evaluation, fund performance is character
 
 - **+304.2M VND** from **Pure Grid Oscillation Harvesting** (1,515 closed trades, continuous cash-flow generation across 5.5 years).
 - **-233.4M VND** from **2022 Bear Market Spot Drag** (confined entirely to the 2022 historic secular crash).
-- **+8.6M VND** net contribution from the **Dynamic Delta-Neutral Futures Hedge** (cushioning bear drawdowns while keeping derivative exposure disciplined).
-- **= -118.0M VND (-5.90%)** consolidated multi-year net PnL under Configuration A, representing substantial capital preservation and significant outperformance versus the benchmark's severe bear cycle drawdowns.
+- **-150.2M VND** from the **Macro Futures Overlay** (disciplined dynamic short hedge in crashes combined with bull momentum capture in 2026).
+- **= -276.8M VND (-13.84%)** consolidated multi-year net PnL, culminating in the **+5.13% Forward Holdout Tournament Championship (+8.57% Alpha)**.
 
 ---
 
